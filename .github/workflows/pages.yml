@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - claude/commute-train-info-4mXEQ
   workflow_dispatch:
 
 permissions:

@@ -31,11 +31,8 @@ sample board. Useful for checking the layout offline.
 This repo ships a Pages workflow at `.github/workflows/pages.yml`.
 
 1. In the repo: **Settings → Pages → Build and deployment → Source: GitHub Actions.**
-2. Push to `main` (or the `claude/commute-train-info-4mXEQ` branch — both trigger
-   the workflow). The action publishes the site and prints the URL.
-   - If the `github-pages` environment is restricted to the default branch, either
-     merge to `main` or add the branch under **Settings → Environments →
-     github-pages → Deployment branches**.
+2. Push (or merge) to `main`. The workflow runs on pushes to `main` and via manual
+   **Run workflow** (`workflow_dispatch`), then publishes the site and prints the URL.
 3. Share the resulting `https://<user>.github.io/<repo>/` URL.
 
 ## Configuration
