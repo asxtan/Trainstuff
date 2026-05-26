@@ -294,6 +294,9 @@
 
     var now = new Date();
     updatedEl.textContent = "Updated " + pad(now.getHours()) + ":" + pad(now.getMinutes());
+    updatedEl.classList.remove("flash");
+    void updatedEl.offsetWidth; // reflow so the animation restarts each refresh
+    updatedEl.classList.add("flash");
   }
 
   function pad(n) { return (n < 10 ? "0" : "") + n; }
@@ -307,7 +310,7 @@
     var myToken = ++fetchToken;
     var url = DEMO ? "sample_board.json" : boardUrl();
 
-    fetch(url, { cache: "no-store" })
+    return fetch(url, { cache: "no-store" })
       .then(function (r) {
         if (!r.ok) throw new Error("HTTP " + r.status);
         return r.json();
@@ -335,7 +338,22 @@
     loadBoard();
   });
 
-  refreshBtn.addEventListener("click", loadBoard);
+  function delay(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+  function manualRefresh() {
+    if (refreshBtn.dataset.busy === "1") return;
+    refreshBtn.dataset.busy = "1";
+    refreshBtn.classList.add("loading");
+    refreshBtn.setAttribute("aria-busy", "true");
+    // Keep the spinner visible briefly even when the response is instant.
+    Promise.all([loadBoard(), delay(450)]).then(function () {
+      refreshBtn.classList.remove("loading");
+      refreshBtn.removeAttribute("aria-busy");
+      refreshBtn.dataset.busy = "0";
+    });
+  }
+
+  refreshBtn.addEventListener("click", manualRefresh);
 
   document.addEventListener("visibilitychange", function () {
     if (document.visibilityState === "visible") loadBoard();
