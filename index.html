@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Commute Board</title>
+  <meta name="theme-color" content="#0b1f17" />
+  <meta name="description" content="Live UK train departures for your commute." />
+
+  <!-- PWA / iOS Add to Home Screen -->
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Commute" />
+
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="picker">
+      <div class="field">
+        <label for="from-input">From</label>
+        <input id="from-input" type="text" autocomplete="off" autocapitalize="words"
+               spellcheck="false" placeholder="Station" aria-label="From station" />
+        <ul id="from-list" class="suggestions" hidden></ul>
+      </div>
+
+      <button id="swap-btn" class="swap" type="button" aria-label="Reverse direction" title="Reverse">
+        &#8646;
+      </button>
+
+      <div class="field">
+        <label for="to-input">To</label>
+        <input id="to-input" type="text" autocomplete="off" autocapitalize="words"
+               spellcheck="false" placeholder="Station" aria-label="To station" />
+        <ul id="to-list" class="suggestions" hidden></ul>
+      </div>
+    </div>
+    <div class="status-line">
+      <span id="route-label" class="route"></span>
+      <span id="updated" class="updated"></span>
+    </div>
+  </header>
+
+  <main id="board" class="board" aria-live="polite">
+    <p class="placeholder">Loading departures…</p>
+  </main>
+
+  <div id="banner" class="banner" hidden></div>
+
+  <footer class="footer">
+    <button id="refresh-btn" type="button" class="refresh">Refresh</button>
+    <span class="credit">Live data via Huxley2 / National Rail Darwin</span>
+  </footer>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", function () {
+        navigator.serviceWorker.register("sw.js").catch(function () {});
+      });
+    }
+  </script>
+</body>
+</html>

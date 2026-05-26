@@ -1,0 +1,76 @@
+{
+  "generatedAt": "2026-05-26T08:12:30.0000000+01:00",
+  "locationName": "East Croydon",
+  "crs": "ECR",
+  "filterLocationName": "London Victoria",
+  "filtercrs": "VIC",
+  "platformAvailable": true,
+  "areServicesAvailable": true,
+  "nrccMessages": [
+    { "value": "Demo data — this is a bundled sample payload, not live information." }
+  ],
+  "trainServices": [
+    {
+      "std": "08:15",
+      "etd": "On time",
+      "platform": "3",
+      "operator": "Southern",
+      "operatorCode": "SN",
+      "isCancelled": false,
+      "length": 8,
+      "destination": [{ "locationName": "London Victoria", "crs": "VIC" }]
+    },
+    {
+      "std": "08:21",
+      "etd": "08:29",
+      "platform": "4",
+      "operator": "Thameslink",
+      "operatorCode": "TL",
+      "isCancelled": false,
+      "delayReason": "This train has been delayed by a signalling problem.",
+      "length": 12,
+      "destination": [{ "locationName": "London Bridge", "crs": "LBG" }]
+    },
+    {
+      "std": "08:27",
+      "etd": "On time",
+      "platform": "3",
+      "operator": "Southern",
+      "operatorCode": "SN",
+      "isCancelled": false,
+      "length": 0,
+      "destination": [{ "locationName": "London Victoria", "crs": "VIC" }]
+    },
+    {
+      "std": "08:33",
+      "etd": "Cancelled",
+      "platform": null,
+      "operator": "Southern",
+      "operatorCode": "SN",
+      "isCancelled": true,
+      "cancelReason": "This train has been cancelled because of a fault on this train.",
+      "length": 0,
+      "destination": [{ "locationName": "London Victoria", "crs": "VIC" }]
+    },
+    {
+      "std": "08:39",
+      "etd": "On time",
+      "platform": "2",
+      "operator": "Gatwick Express",
+      "operatorCode": "GX",
+      "isCancelled": false,
+      "length": 8,
+      "destination": [{ "locationName": "London Victoria", "crs": "VIC" }]
+    },
+    {
+      "std": "08:45",
+      "etd": "08:48",
+      "platform": "3",
+      "operator": "Southern",
+      "operatorCode": "SN",
+      "isCancelled": false,
+      "length": 10,
+      "destination": [{ "locationName": "London Victoria", "crs": "VIC" }]
+    }
+  ]
+}
