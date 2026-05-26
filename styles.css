@@ -156,20 +156,37 @@ body {
 }
 .row .dest { grid-area: dest; font-size: 16px; font-weight: 600; }
 .row .status { grid-area: status; font-size: 14px; }
-.row .plat {
-  grid-area: plat;
+.row .plat, .row .cars {
   justify-self: end;
-  font-size: 13px;
-  color: var(--muted);
-  text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 60px;
 }
-.row .plat b { display: block; font-size: 18px; color: var(--text); }
-.row .cars {
-  grid-area: cars;
-  justify-self: end;
-  font-size: 13px;
+.row .plat { grid-area: plat; }
+.row .cars { grid-area: cars; }
+
+.badge-label {
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
   color: var(--muted);
 }
+.row .plat b, .row .cars b {
+  display: inline-block;
+  min-width: 46px;
+  padding: 4px 10px;
+  text-align: center;
+  font-size: 23px;
+  font-weight: 800;
+  line-height: 1.15;
+  border-radius: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.row .plat b { background: rgba(111, 176, 255, 0.16); color: var(--blue); }
+.row .cars b { background: rgba(47, 174, 111, 0.16); color: var(--accent); }
+.row.is-cancelled .plat b, .row.is-cancelled .cars b { opacity: 0.5; }
 
 .status.ontime { color: var(--accent); }
 .status.delayed { color: var(--amber); }

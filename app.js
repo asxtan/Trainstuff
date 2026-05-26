@@ -201,14 +201,28 @@
     return { text: etd, cls: "delayed" };
   }
 
-  function carsText(svc) {
+  function carsCount(svc) {
     var n = parseInt(svc.length, 10);
-    if (!n || n <= 0) return "—";
-    return n + (n === 1 ? " car" : " cars");
+    return (!n || n <= 0) ? null : n;
   }
 
   function platText(svc) {
     return svc.platform ? String(svc.platform) : "—";
+  }
+
+  // Right-hand info chip: small label above a bold value. Value is set via
+  // textContent so data from the train API can never inject markup.
+  function badge(cls, label, value) {
+    var wrap = document.createElement("div");
+    wrap.className = cls;
+    var lab = document.createElement("span");
+    lab.className = "badge-label";
+    lab.textContent = label;
+    var val = document.createElement("b");
+    val.textContent = value;
+    wrap.appendChild(lab);
+    wrap.appendChild(val);
+    return wrap;
   }
 
   function destName(svc) {
@@ -219,9 +233,8 @@
   }
 
   function stripTags(s) {
-    var d = document.createElement("div");
-    d.innerHTML = String(s || "");
-    return (d.textContent || "").trim();
+    // Remove any markup without parsing it (never executes untrusted HTML).
+    return String(s || "").replace(/<[^>]*>/g, "").trim();
   }
 
   function showBanner(msg, isError) {
@@ -258,13 +271,10 @@
         status.className = "status " + st.cls;
         status.textContent = st.text;
 
-        var plat = document.createElement("div");
-        plat.className = "plat";
-        plat.innerHTML = "Plat<b>" + platText(svc) + "</b>";
+        var plat = badge("plat", "Platform", platText(svc));
 
-        var cars = document.createElement("div");
-        cars.className = "cars";
-        cars.textContent = carsText(svc);
+        var n = carsCount(svc);
+        var cars = badge("cars", n === 1 ? "Carriage" : "Carriages", n ? String(n) : "—");
 
         row.appendChild(time);
         row.appendChild(dest);
