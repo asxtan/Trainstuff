@@ -184,10 +184,19 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.platform-line { font-size: 13px; color: var(--muted); }
+.platform-line {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 1px;
+  font-size: 14px;
+  color: var(--muted);
+}
 .platform-line b {
   color: var(--blue);
-  font-weight: 700;
+  font-weight: 800;
+  font-size: 25px;
+  line-height: 1;
   font-variant-numeric: tabular-nums;
 }
 
