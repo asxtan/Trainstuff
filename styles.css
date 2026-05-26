@@ -138,83 +138,94 @@ body {
 .placeholder { color: var(--muted); text-align: center; margin-top: 30px; }
 
 .row {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  grid-template-areas:
-    "time dest plat"
-    "time status cars";
-  column-gap: 12px;
-  row-gap: 2px;
+  display: flex;
   align-items: center;
+  gap: 14px;
   padding: 14px;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--radius);
 }
 
-.row .time {
-  grid-area: time;
+/* Left: scheduled time + expected/status beneath it. */
+.col-time {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 72px;
+}
+.col-time .time {
   font-size: 30px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  line-height: 1;
+  line-height: 1.05;
 }
-.row .dest { grid-area: dest; font-size: 16px; font-weight: 600; }
-.row .status { grid-area: status; font-size: 14px; }
-.row .plat, .row .cars {
-  justify-self: end;
+.col-time .expected {
+  font-size: 13px;
+  font-weight: 600;
+  margin-top: 2px;
+}
+.expected.ontime { color: var(--accent); }
+.expected.delayed { color: var(--amber); }
+.expected.cancelled { color: var(--red); }
+
+/* Middle: destination + platform line. */
+.col-mid {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  align-items: center;
   gap: 3px;
-  min-width: 60px;
 }
-.row .plat { grid-area: plat; }
-.row .cars { grid-area: cars; }
+.col-mid .dest {
+  font-size: 16px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.platform-line { font-size: 13px; color: var(--muted); }
+.platform-line b {
+  color: var(--blue);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
 
+/* Right: carriage count. */
+.col-cars { flex-shrink: 0; }
 .badge-label {
   font-size: 10px;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--muted);
 }
-.row .plat b, .row .cars b {
+.row .cars {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 56px;
+}
+.row .cars b {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 5px;
-  min-width: 46px;
-  line-height: 1.15;
-  border-radius: 10px;
-  font-variant-numeric: tabular-nums;
-}
-/* Platform: solid, filled, large number — the prominent "where to board" value. */
-.row .plat b {
-  padding: 4px 10px;
-  background: rgba(111, 176, 255, 0.18);
-  color: var(--blue);
-  font-size: 23px;
-  font-weight: 800;
-}
-/* Carriages: outlined chip with a train icon — a clearly different shape. */
-.row .cars b {
   padding: 3px 9px;
+  border-radius: 10px;
   background: transparent;
   border: 1.5px solid rgba(47, 174, 111, 0.55);
   color: var(--accent);
   font-size: 16px;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 .row .cars .ico { display: inline-flex; width: 15px; height: 15px; }
 .row .cars .ico svg { width: 100%; height: 100%; display: block; }
-.row.is-cancelled .plat b, .row.is-cancelled .cars b { opacity: 0.5; }
 
-.status.ontime { color: var(--accent); }
-.status.delayed { color: var(--amber); }
-.status.cancelled { color: var(--red); font-weight: 700; }
-
-.row.is-cancelled { opacity: 0.8; border-color: #4a2222; }
+.row.is-cancelled { opacity: 0.85; border-color: #4a2222; }
 .row.is-cancelled .time { text-decoration: line-through; text-decoration-thickness: 2px; }
+.row.is-cancelled .cars b { opacity: 0.5; }
 
 /* ---- banner / footer ---- */
 .banner {

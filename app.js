@@ -272,27 +272,40 @@
         var row = document.createElement("div");
         row.className = "row" + (st.cancelled ? " is-cancelled" : "");
 
+        // Left: scheduled time with the expected/status beneath it.
+        var colTime = document.createElement("div");
+        colTime.className = "col-time";
         var time = document.createElement("div");
         time.className = "time";
         time.textContent = svc.std || svc.sta || "--:--";
+        var exp = document.createElement("div");
+        exp.className = "expected " + st.cls;
+        exp.textContent = st.text;
+        colTime.appendChild(time);
+        colTime.appendChild(exp);
 
+        // Middle: destination with the platform on the line below.
+        var colMid = document.createElement("div");
+        colMid.className = "col-mid";
         var dest = document.createElement("div");
         dest.className = "dest";
         dest.textContent = destName(svc) || (svc.operator || "");
+        var platLine = document.createElement("div");
+        platLine.className = "platform-line";
+        platLine.appendChild(document.createTextNode("Platform "));
+        var platVal = document.createElement("b");
+        platVal.textContent = platText(svc);
+        platLine.appendChild(platVal);
+        colMid.appendChild(dest);
+        colMid.appendChild(platLine);
 
-        var status = document.createElement("div");
-        status.className = "status " + st.cls;
-        status.textContent = st.text;
-
-        var plat = badge("plat", "Platform", platText(svc));
-
+        // Right: carriage count.
         var n = carsCount(svc);
         var cars = badge("cars", n === 1 ? "Carriage" : "Carriages", n ? String(n) : "—", true);
+        cars.classList.add("col-cars");
 
-        row.appendChild(time);
-        row.appendChild(dest);
-        row.appendChild(status);
-        row.appendChild(plat);
+        row.appendChild(colTime);
+        row.appendChild(colMid);
         row.appendChild(cars);
         boardEl.appendChild(row);
       });
