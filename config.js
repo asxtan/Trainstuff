@@ -5,14 +5,15 @@ window.CONFIG = {
   // or a Cloudflare Worker that injects a Darwin Rail Data Marketplace token.
   HUXLEY_BASE_URL: "https://national-rail-api.davwheat.dev",
 
-  // First-run default station pair (overridden once the user picks/saves one).
-  DEFAULT_FROM: "ECR", // East Croydon
-  DEFAULT_TO: "VIC",   // London Victoria
+  // First-run defaults only. Home and the two work stations are all editable
+  // in-app (the gear button) and saved per device — nothing is hardcoded.
+  DEFAULT_HOME: "ECR",   // East Croydon
+  DEFAULT_WORK_A: "VIC", // London Victoria
+  DEFAULT_WORK_B: "LBG", // London Bridge
 
-  NUM_ROWS: 6,         // how many departures to request
+  NUM_ROWS: 8,         // how many departures to request per board
   REFRESH_MS: 45000,   // auto-refresh interval (ms)
 
-  // On very first run with no saved pair, flip direction by time of day:
-  // before midday -> DEFAULT_FROM->DEFAULT_TO, otherwise reversed.
-  AUTO_DIRECTION_BY_TIME: true,
+  // On load, before this hour default to "To work", otherwise "To home".
+  MORNING_BEFORE_HOUR: 12,
 };

@@ -1,25 +1,29 @@
 # Commute Board
 
-A tiny, installable web app for your daily commute: pick any two UK stations and
-see the next departures with **time, live status, platform, and number of
-carriages**. Built as a static Progressive Web App — add it to your iPhone Home
-Screen and it launches full-screen like a native app, one tap.
+A tiny, installable web app for your daily commute: see the next departures with
+**time, live status, platform, and number of carriages**. Built as a static
+Progressive Web App — add it to your iPhone Home Screen and it launches
+full-screen like a native app, one tap.
 
-- **Any station pair** with name autocomplete, a **⇄ reverse** button, and it
-  **remembers your last pair** (per device).
+- **Home + two work stations**, all chosen in-app (the gear button) and saved
+  per device — nothing is hardcoded.
+- **To work** shows one merged board of departures from Home that call at
+  *either* work station, sorted by time and tagged with which one each serves.
+- **To home** lets you pick which work station you're leaving from, back to Home.
+- The toggle **defaults by time of day** (morning → To work).
 - **Live data** comes straight from a public [Huxley2](https://github.com/jpsingleton/Huxley2)
   instance (a CORS-friendly JSON proxy over National Rail's Darwin feed). No
   account, no API key, no server of your own.
 - **Shareable** — just send someone the URL; they Add to Home Screen too.
 
-Default pair is **East Croydon ⇄ London Victoria**.
+Defaults: Home **East Croydon**, work stations **London Victoria** and **London Bridge**.
 
 ## Use it on your phone
 
 1. Open the site URL in Safari (iOS) or Chrome (Android).
 2. **Share → Add to Home Screen.** An app icon appears.
-3. Tap the icon — pick your stations, hit **⇄** to flip direction. Your choice
-   is remembered next time.
+3. Tap the icon. Use the gear to set your Home and two work stations once; after
+   that just flip **To work / To home**. Your stations are remembered per device.
 
 ## Try it without the network
 

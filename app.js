@@ -3,57 +3,67 @@
 (function () {
   var CFG = window.CONFIG || {};
   var BASE = (CFG.HUXLEY_BASE_URL || "").replace(/\/+$/, "");
-  var NUM_ROWS = CFG.NUM_ROWS || 6;
+  var NUM_ROWS = CFG.NUM_ROWS || 8;
   var REFRESH_MS = CFG.REFRESH_MS || 45000;
+  var MORNING_BEFORE = CFG.MORNING_BEFORE_HOUR == null ? 12 : CFG.MORNING_BEFORE_HOUR;
   var DEMO = /[?&]demo=1\b/.test(location.search);
 
-  var KEY_FROM = "cmtboard.from";
-  var KEY_TO = "cmtboard.to";
+  var KEYS = { home: "cmt.home", workA: "cmt.workA", workB: "cmt.workB", ret: "cmt.ret" };
 
   // ---- DOM ----
-  var fromInput = document.getElementById("from-input");
-  var toInput = document.getElementById("to-input");
-  var fromList = document.getElementById("from-list");
-  var toList = document.getElementById("to-list");
-  var swapBtn = document.getElementById("swap-btn");
-  var refreshBtn = document.getElementById("refresh-btn");
-  var boardEl = document.getElementById("board");
-  var bannerEl = document.getElementById("banner");
+  var modeWorkBtn = document.getElementById("mode-work");
+  var modeHomeBtn = document.getElementById("mode-home");
+  var settingsBtn = document.getElementById("settings-btn");
+  var settingsPanel = document.getElementById("settings");
+  var settingsDone = document.getElementById("settings-done");
+  var returnPick = document.getElementById("return-pick");
+  var retABtn = document.getElementById("ret-a");
+  var retBBtn = document.getElementById("ret-b");
   var routeLabel = document.getElementById("route-label");
   var updatedEl = document.getElementById("updated");
+  var boardEl = document.getElementById("board");
+  var bannerEl = document.getElementById("banner");
+  var refreshBtn = document.getElementById("refresh-btn");
+  var homeInput = document.getElementById("home-input");
+  var aInput = document.getElementById("a-input");
+  var bInput = document.getElementById("b-input");
 
   // ---- state ----
-  var stations = [];               // [{name, crs}]
-  var nameByCrs = {};              // crs -> name
-  var state = { from: null, to: null };
-  var fetchToken = 0;              // guards overlapping board fetches
+  var stations = [];
+  var nameByCrs = {};
+  var state = { home: "ECR", workA: "VIC", workB: "LBG", ret: "A", mode: "work" };
+  var fetchToken = 0;
   var timer = null;
 
-  function stationName(crs) {
-    return nameByCrs[crs] || crs || "";
-  }
+  function stationName(crs) { return nameByCrs[crs] || crs || ""; }
+  function pad(n) { return (n < 10 ? "0" : "") + n; }
 
-  function savePair() {
+  // ---------------------------------------------------------------- settings
+  function loadSettings() {
     try {
-      localStorage.setItem(KEY_FROM, state.from);
-      localStorage.setItem(KEY_TO, state.to);
-    } catch (e) { /* private mode etc. */ }
-  }
-
-  function initialPair() {
-    var f, t;
-    try {
-      f = localStorage.getItem(KEY_FROM);
-      t = localStorage.getItem(KEY_TO);
-    } catch (e) { /* ignore */ }
-    if (!f || !t) {
-      f = CFG.DEFAULT_FROM || "ECR";
-      t = CFG.DEFAULT_TO || "VIC";
-      if (CFG.AUTO_DIRECTION_BY_TIME && new Date().getHours() >= 12) {
-        var tmp = f; f = t; t = tmp;
-      }
+      state.home = localStorage.getItem(KEYS.home) || CFG.DEFAULT_HOME || "ECR";
+      state.workA = localStorage.getItem(KEYS.workA) || CFG.DEFAULT_WORK_A || "VIC";
+      state.workB = localStorage.getItem(KEYS.workB) || CFG.DEFAULT_WORK_B || "LBG";
+      state.ret = localStorage.getItem(KEYS.ret) === "B" ? "B" : "A";
+    } catch (e) {
+      state.home = CFG.DEFAULT_HOME || "ECR";
+      state.workA = CFG.DEFAULT_WORK_A || "VIC";
+      state.workB = CFG.DEFAULT_WORK_B || "LBG";
+      state.ret = "A";
     }
-    return { from: f, to: t };
+  }
+
+  function saveSettings() {
+    try {
+      localStorage.setItem(KEYS.home, state.home);
+      localStorage.setItem(KEYS.workA, state.workA);
+      localStorage.setItem(KEYS.workB, state.workB);
+      localStorage.setItem(KEYS.ret, state.ret);
+    } catch (e) { /* private mode */ }
+  }
+
+  function deriveMode() {
+    return new Date().getHours() < MORNING_BEFORE ? "work" : "home";
   }
 
   // ---------------------------------------------------------------- pickers
@@ -63,8 +73,7 @@
     var starts = [], contains = [];
     for (var i = 0; i < stations.length; i++) {
       var s = stations[i];
-      var name = s.name.toLowerCase();
-      var crs = s.crs.toLowerCase();
+      var name = s.name.toLowerCase(), crs = s.crs.toLowerCase();
       if (crs === q) { starts.unshift(s); continue; }
       if (name.indexOf(q) === 0 || crs.indexOf(q) === 0) starts.push(s);
       else if (name.indexOf(q) !== -1) contains.push(s);
@@ -74,7 +83,6 @@
 
   var liveAbort = null;
   function liveSearch(query) {
-    // Best-effort augmentation via Huxley2 /crs/{query}. Failures are ignored.
     if (DEMO || !BASE || query.trim().length < 3) return Promise.resolve([]);
     if (liveAbort) liveAbort.abort();
     liveAbort = new AbortController();
@@ -95,15 +103,12 @@
 
   function mergeStations(a, b) {
     var seen = {}, out = [];
-    a.concat(b).forEach(function (s) {
-      if (s.crs && !seen[s.crs]) { seen[s.crs] = 1; out.push(s); }
-    });
+    a.concat(b).forEach(function (s) { if (s.crs && !seen[s.crs]) { seen[s.crs] = 1; out.push(s); } });
     return out.slice(0, 8);
   }
 
-  function setupPicker(input, listEl, which) {
-    var activeIdx = -1;
-    var current = [];
+  function setupPicker(input, listEl, key) {
+    var activeIdx = -1, current = [];
 
     function close() { listEl.hidden = true; listEl.innerHTML = ""; activeIdx = -1; current = []; }
 
@@ -111,29 +116,30 @@
       if (!s) return;
       if (!nameByCrs[s.crs]) nameByCrs[s.crs] = s.name;
       input.value = s.name;
-      state[which] = s.crs;
-      savePair();
+      state[key] = s.crs;
+      saveSettings();
       close();
-      syncLabels();
+      refreshLabels();
       loadBoard();
     }
 
+    function paintActive() {
+      var lis = listEl.querySelectorAll("li");
+      for (var i = 0; i < lis.length; i++) lis[i].className = (i === activeIdx ? "active" : "");
+      if (lis[activeIdx]) lis[activeIdx].scrollIntoView({ block: "nearest" });
+    }
+
     function render(items) {
-      current = items;
-      activeIdx = -1;
+      current = items; activeIdx = -1;
       if (!items.length) { close(); return; }
       listEl.innerHTML = "";
-      items.forEach(function (s, idx) {
+      items.forEach(function (s) {
         var li = document.createElement("li");
-        var nm = document.createElement("span");
-        nm.textContent = s.name;
-        var code = document.createElement("span");
-        code.className = "crs";
-        code.textContent = s.crs;
+        var nm = document.createElement("span"); nm.textContent = s.name;
+        var code = document.createElement("span"); code.className = "crs"; code.textContent = s.crs;
         li.appendChild(nm); li.appendChild(code);
         li.addEventListener("mousedown", function (e) { e.preventDefault(); choose(s); });
         li.addEventListener("touchstart", function (e) { e.preventDefault(); choose(s); }, { passive: false });
-        if (idx === activeIdx) li.className = "active";
         listEl.appendChild(li);
       });
       listEl.hidden = false;
@@ -143,14 +149,11 @@
       var q = input.value;
       var base = localMatches(q);
       render(base);
-      liveSearch(q).then(function (extra) {
-        if (extra.length) render(mergeStations(base, extra));
-      });
+      liveSearch(q).then(function (extra) { if (extra.length) render(mergeStations(base, extra)); });
     }
 
     input.addEventListener("focus", function () { input.select(); refreshSuggestions(); });
     input.addEventListener("input", refreshSuggestions);
-
     input.addEventListener("keydown", function (e) {
       if (listEl.hidden) return;
       if (e.key === "ArrowDown") { e.preventDefault(); activeIdx = Math.min(activeIdx + 1, current.length - 1); paintActive(); }
@@ -158,43 +161,61 @@
       else if (e.key === "Enter") { e.preventDefault(); choose(activeIdx >= 0 ? current[activeIdx] : current[0]); }
       else if (e.key === "Escape") { close(); input.blur(); }
     });
-
-    function paintActive() {
-      var lis = listEl.querySelectorAll("li");
-      for (var i = 0; i < lis.length; i++) lis[i].className = (i === activeIdx ? "active" : "");
-      if (lis[activeIdx]) lis[activeIdx].scrollIntoView({ block: "nearest" });
-    }
-
     input.addEventListener("blur", function () {
-      // Resolve typed text against known stations; otherwise revert.
       setTimeout(function () {
         var typed = input.value.trim().toLowerCase();
         if (typed) {
-          var hit = null;
           for (var i = 0; i < stations.length; i++) {
             var s = stations[i];
-            if (s.name.toLowerCase() === typed || s.crs.toLowerCase() === typed) { hit = s; break; }
+            if (s.name.toLowerCase() === typed || s.crs.toLowerCase() === typed) {
+              if (s.crs !== state[key]) { choose(s); return; }
+              break;
+            }
           }
-          if (hit && hit.crs !== state[which]) { choose(hit); return; }
         }
-        input.value = stationName(state[which]);
+        input.value = stationName(state[key]);
         close();
       }, 120);
     });
   }
 
-  function syncLabels() {
-    fromInput.value = stationName(state.from);
-    toInput.value = stationName(state.to);
-    routeLabel.textContent = stationName(state.from) + "  →  " + stationName(state.to);
+  // ---------------------------------------------------------------- labels / mode UI
+  function refreshLabels() {
+    homeInput.value = stationName(state.home);
+    aInput.value = stationName(state.workA);
+    bInput.value = stationName(state.workB);
+    retABtn.textContent = stationName(state.workA);
+    retBBtn.textContent = stationName(state.workB);
+    retABtn.classList.toggle("active", state.ret === "A");
+    retBBtn.classList.toggle("active", state.ret === "B");
+
+    if (state.mode === "work") {
+      routeLabel.textContent = stationName(state.home) + "  →  " +
+        stationName(state.workA) + " · " + stationName(state.workB);
+    } else {
+      var origin = state.ret === "B" ? state.workB : state.workA;
+      routeLabel.textContent = stationName(origin) + "  →  " + stationName(state.home);
+    }
   }
 
-  // ---------------------------------------------------------------- board
+  function applyModeUI() {
+    modeWorkBtn.classList.toggle("active", state.mode === "work");
+    modeHomeBtn.classList.toggle("active", state.mode === "home");
+    returnPick.hidden = state.mode !== "home";
+    refreshLabels();
+  }
+
+  function setMode(m) {
+    if (state.mode === m) return;
+    state.mode = m;
+    applyModeUI();
+    loadBoard();
+  }
+
+  // ---------------------------------------------------------------- board data
   function statusInfo(svc) {
     var etd = (svc.etd || "").trim();
-    if (svc.isCancelled || /cancel/i.test(etd)) {
-      return { text: "Cancelled", cls: "cancelled", cancelled: true };
-    }
+    if (svc.isCancelled || /cancel/i.test(etd)) return { text: "Cancelled", cls: "cancelled", cancelled: true };
     if (!etd || /^on time$/i.test(etd)) return { text: "On time", cls: "ontime" };
     if (/^\d{1,2}:\d{2}$/.test(etd)) return { text: "Exp " + etd, cls: "delayed" };
     if (/delay/i.test(etd)) return { text: "Delayed", cls: "delayed" };
@@ -206,37 +227,7 @@
     return (!n || n <= 0) ? null : n;
   }
 
-  function platText(svc) {
-    return svc.platform ? String(svc.platform) : "—";
-  }
-
-  // Simple side-view train glyph, developer-controlled (static) markup only.
-  var TRAIN_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="14" rx="3"/><line x1="4" y1="11" x2="20" y2="11"/><line x1="8" y1="17" x2="6" y2="21"/><line x1="16" y1="17" x2="18" y2="21"/></svg>';
-
-  // Right-hand info chip: small label above a bold value. The value is set via
-  // textContent so data from the train API can never inject markup; the icon is
-  // a fixed local SVG, not derived from any response.
-  function badge(cls, label, value, withIcon) {
-    var wrap = document.createElement("div");
-    wrap.className = cls;
-    var lab = document.createElement("span");
-    lab.className = "badge-label";
-    lab.textContent = label;
-    var val = document.createElement("b");
-    if (withIcon) {
-      var ico = document.createElement("span");
-      ico.className = "ico";
-      ico.innerHTML = TRAIN_ICON;
-      val.appendChild(ico);
-    }
-    var num = document.createElement("span");
-    num.className = "num";
-    num.textContent = value;
-    val.appendChild(num);
-    wrap.appendChild(lab);
-    wrap.appendChild(val);
-    return wrap;
-  }
+  function platText(svc) { return svc.platform ? String(svc.platform) : "—"; }
 
   function destName(svc) {
     if (svc.destination && svc.destination[0] && svc.destination[0].locationName) {
@@ -245,10 +236,9 @@
     return "";
   }
 
-  function stripTags(s) {
-    // Remove any markup without parsing it (never executes untrusted HTML).
-    return String(s || "").replace(/<[^>]*>/g, "").trim();
-  }
+  function stripTags(s) { return String(s || "").replace(/<[^>]*>/g, "").trim(); }
+
+  var TRAIN_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="14" rx="3"/><line x1="4" y1="11" x2="20" y2="11"/><line x1="8" y1="17" x2="6" y2="21"/><line x1="16" y1="17" x2="18" y2="21"/></svg>';
 
   function showBanner(msg, isError) {
     if (!msg) { bannerEl.hidden = true; bannerEl.textContent = ""; return; }
@@ -257,128 +247,201 @@
     bannerEl.hidden = false;
   }
 
-  function renderBoard(data) {
-    var services = (data && data.trainServices) || [];
-    boardEl.innerHTML = "";
+  function carsBadge(svc) {
+    var n = carsCount(svc);
+    var wrap = document.createElement("div");
+    wrap.className = "cars col-cars";
+    var lab = document.createElement("span"); lab.className = "badge-label";
+    lab.textContent = n === 1 ? "Carriage" : "Carriages";
+    var val = document.createElement("b");
+    var ico = document.createElement("span"); ico.className = "ico"; ico.innerHTML = TRAIN_ICON;
+    var num = document.createElement("span"); num.className = "num"; num.textContent = n ? String(n) : "—";
+    val.appendChild(ico); val.appendChild(num);
+    wrap.appendChild(lab); wrap.appendChild(val);
+    return wrap;
+  }
 
+  function platformLine(svc) {
+    var line = document.createElement("div");
+    line.className = "platform-line";
+    line.appendChild(document.createTextNode("Platform "));
+    var b = document.createElement("b");
+    b.textContent = platText(svc);
+    line.appendChild(b);
+    return line;
+  }
+
+  function buildRow(svc, isWork) {
+    var st = statusInfo(svc);
+    var row = document.createElement("div");
+    row.className = "row" + (st.cancelled ? " is-cancelled" : "");
+
+    var colTime = document.createElement("div");
+    colTime.className = "col-time";
+    var time = document.createElement("div"); time.className = "time";
+    time.textContent = svc.std || svc.sta || "--:--";
+    var exp = document.createElement("div"); exp.className = "expected " + st.cls;
+    exp.textContent = st.text;
+    colTime.appendChild(time); colTime.appendChild(exp);
+
+    var colMid = document.createElement("div");
+    colMid.className = "col-mid";
+    if (isWork) {
+      var tags = document.createElement("div");
+      tags.className = "tags";
+      (svc._tags || []).forEach(function (crs) {
+        var tag = document.createElement("span");
+        tag.className = "tag " + (crs === state.workA ? "tag-a" : "tag-b");
+        tag.textContent = stationName(crs);
+        tags.appendChild(tag);
+      });
+      colMid.appendChild(tags);
+    } else {
+      var dest = document.createElement("div"); dest.className = "dest";
+      dest.textContent = destName(svc) || (svc.operator || "");
+      colMid.appendChild(dest);
+    }
+    colMid.appendChild(platformLine(svc));
+
+    row.appendChild(colTime);
+    row.appendChild(colMid);
+    row.appendChild(carsBadge(svc));
+    return row;
+  }
+
+  function renderServices(services, isWork) {
+    boardEl.innerHTML = "";
     if (!services.length) {
       var p = document.createElement("p");
       p.className = "placeholder";
       p.textContent = "No direct departures found in the next while.";
       boardEl.appendChild(p);
-    } else {
-      services.forEach(function (svc) {
-        var st = statusInfo(svc);
-        var row = document.createElement("div");
-        row.className = "row" + (st.cancelled ? " is-cancelled" : "");
-
-        // Left: scheduled time with the expected/status beneath it.
-        var colTime = document.createElement("div");
-        colTime.className = "col-time";
-        var time = document.createElement("div");
-        time.className = "time";
-        time.textContent = svc.std || svc.sta || "--:--";
-        var exp = document.createElement("div");
-        exp.className = "expected " + st.cls;
-        exp.textContent = st.text;
-        colTime.appendChild(time);
-        colTime.appendChild(exp);
-
-        // Middle: destination with the platform on the line below.
-        var colMid = document.createElement("div");
-        colMid.className = "col-mid";
-        var dest = document.createElement("div");
-        dest.className = "dest";
-        dest.textContent = destName(svc) || (svc.operator || "");
-        var platLine = document.createElement("div");
-        platLine.className = "platform-line";
-        platLine.appendChild(document.createTextNode("Platform "));
-        var platVal = document.createElement("b");
-        platVal.textContent = platText(svc);
-        platLine.appendChild(platVal);
-        colMid.appendChild(dest);
-        colMid.appendChild(platLine);
-
-        // Right: carriage count.
-        var n = carsCount(svc);
-        var cars = badge("cars", n === 1 ? "Carriage" : "Carriages", n ? String(n) : "—", true);
-        cars.classList.add("col-cars");
-
-        row.appendChild(colTime);
-        row.appendChild(colMid);
-        row.appendChild(cars);
-        boardEl.appendChild(row);
-      });
+      return;
     }
+    services.forEach(function (svc) { boardEl.appendChild(buildRow(svc, isWork)); });
+  }
 
+  function applyMeta(data) {
     var msgs = (data && data.nrccMessages) || [];
-    if (msgs.length) {
-      showBanner(stripTags(msgs[0].value || msgs[0].xhtmlMessage || msgs[0]), DEMO);
-    } else {
-      showBanner(null);
-    }
-
+    if (msgs.length) showBanner(stripTags(msgs[0].value || msgs[0].xhtmlMessage || msgs[0]), DEMO);
+    else showBanner(null);
     var now = new Date();
     updatedEl.textContent = "Updated " + pad(now.getHours()) + ":" + pad(now.getMinutes());
     updatedEl.classList.remove("flash");
-    void updatedEl.offsetWidth; // reflow so the animation restarts each refresh
+    void updatedEl.offsetWidth;
     updatedEl.classList.add("flash");
   }
 
-  function pad(n) { return (n < 10 ? "0" : "") + n; }
+  function serviceKey(svc) {
+    return svc.serviceID || svc.serviceIdGuid ||
+      (svc.std + "|" + (svc.platform || "") + "|" + (destName(svc) || svc.operator || ""));
+  }
 
-  function boardUrl() {
-    return BASE + "/departures/" + encodeURIComponent(state.from) +
-      "/to/" + encodeURIComponent(state.to) + "/" + NUM_ROWS;
+  // Merge two destination-filtered boards into one, tagging each train with
+  // the work station(s) it serves and sorting by departure time.
+  function mergeWork(dataA, dataB) {
+    var map = {}, order = [];
+    function add(data, tagCrs) {
+      ((data && data.trainServices) || []).forEach(function (svc) {
+        var key = serviceKey(svc);
+        var item = map[key];
+        if (!item) { item = map[key] = svc; svc._tags = []; order.push(key); }
+        if (item._tags.indexOf(tagCrs) < 0) item._tags.push(tagCrs);
+      });
+    }
+    add(dataA, state.workA);
+    add(dataB, state.workB);
+    var list = order.map(function (k) { return map[k]; });
+    list.sort(function (x, y) { return (x.std || "").localeCompare(y.std || ""); });
+    var nrcc = (dataA && dataA.nrccMessages) || (dataB && dataB.nrccMessages) || [];
+    return { trainServices: list, nrccMessages: nrcc };
+  }
+
+  function getJson(url) {
+    return fetch(url, { cache: "no-store" }).then(function (r) {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.json();
+    });
+  }
+
+  function depUrl(from, to) {
+    return BASE + "/departures/" + encodeURIComponent(from) + "/to/" + encodeURIComponent(to) + "/" + NUM_ROWS;
+  }
+
+  function onError(err) {
+    var hadRows = boardEl.querySelector(".row");
+    if (!hadRows) boardEl.innerHTML = '<p class="placeholder">Could not load departures.</p>';
+    showBanner("Couldn't reach the train data service — showing last known times. (" +
+      (err && err.message ? err.message : "network error") + ")", true);
   }
 
   function loadBoard() {
     var myToken = ++fetchToken;
-    var url = DEMO ? "sample_board.json" : boardUrl();
 
-    return fetch(url, { cache: "no-store" })
-      .then(function (r) {
-        if (!r.ok) throw new Error("HTTP " + r.status);
-        return r.json();
-      })
-      .then(function (data) {
-        if (myToken !== fetchToken) return; // a newer request superseded this
-        renderBoard(data);
-      })
-      .catch(function (err) {
+    if (state.mode === "work") {
+      var ua = DEMO ? "sample_board.json" : depUrl(state.home, state.workA);
+      var ub = DEMO ? "sample_board.json" : depUrl(state.home, state.workB);
+      return Promise.all([
+        getJson(ua).then(function (d) { return d; }, function (e) { return { _err: e }; }),
+        getJson(ub).then(function (d) { return d; }, function (e) { return { _err: e }; })
+      ]).then(function (res) {
         if (myToken !== fetchToken) return;
-        var hadRows = boardEl.querySelector(".row");
-        if (!hadRows) {
-          boardEl.innerHTML = '<p class="placeholder">Could not load departures.</p>';
-        }
-        showBanner("Couldn't reach the train data service — showing last known times. (" +
-          (err && err.message ? err.message : "network error") + ")", true);
+        var a = res[0], b = res[1];
+        if (a._err && b._err) { onError(a._err); return; }
+        var merged = mergeWork(a._err ? null : a, b._err ? null : b);
+        renderServices(merged.trainServices, true);
+        applyMeta(merged);
       });
+    }
+
+    var origin = state.ret === "B" ? state.workB : state.workA;
+    var url = DEMO ? "sample_board.json" : depUrl(origin, state.home);
+    return getJson(url).then(function (data) {
+      if (myToken !== fetchToken) return;
+      renderServices((data && data.trainServices) || [], false);
+      applyMeta(data);
+    }, function (err) {
+      if (myToken !== fetchToken) return;
+      onError(err);
+    });
   }
 
   // ---------------------------------------------------------------- wiring
-  swapBtn.addEventListener("click", function () {
-    var f = state.from; state.from = state.to; state.to = f;
-    savePair();
-    syncLabels();
+  modeWorkBtn.addEventListener("click", function () { setMode("work"); });
+  modeHomeBtn.addEventListener("click", function () { setMode("home"); });
+
+  retABtn.addEventListener("click", function () {
+    if (state.ret === "A") return;
+    state.ret = "A"; saveSettings(); refreshLabels(); loadBoard();
+  });
+  retBBtn.addEventListener("click", function () {
+    if (state.ret === "B") return;
+    state.ret = "B"; saveSettings(); refreshLabels(); loadBoard();
+  });
+
+  settingsBtn.addEventListener("click", function () {
+    var open = settingsPanel.hidden;
+    settingsPanel.hidden = !open;
+    settingsBtn.setAttribute("aria-expanded", open ? "true" : "false");
+  });
+  settingsDone.addEventListener("click", function () {
+    settingsPanel.hidden = true;
+    settingsBtn.setAttribute("aria-expanded", "false");
     loadBoard();
   });
 
   function delay(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
-
   function manualRefresh() {
     if (refreshBtn.dataset.busy === "1") return;
     refreshBtn.dataset.busy = "1";
     refreshBtn.classList.add("loading");
     refreshBtn.setAttribute("aria-busy", "true");
-    // Keep the spinner visible briefly even when the response is instant.
     Promise.all([loadBoard(), delay(450)]).then(function () {
       refreshBtn.classList.remove("loading");
       refreshBtn.removeAttribute("aria-busy");
       refreshBtn.dataset.busy = "0";
     });
   }
-
   refreshBtn.addEventListener("click", manualRefresh);
 
   document.addEventListener("visibilitychange", function () {
@@ -397,12 +460,12 @@
     .catch(function () { stations = []; })
     .then(function () {
       stations.forEach(function (s) { nameByCrs[s.crs] = s.name; });
-      var pair = initialPair();
-      state.from = pair.from;
-      state.to = pair.to;
-      setupPicker(fromInput, fromList, "from");
-      setupPicker(toInput, toList, "to");
-      syncLabels();
+      loadSettings();
+      state.mode = deriveMode();
+      setupPicker(homeInput, document.getElementById("home-list"), "home");
+      setupPicker(aInput, document.getElementById("a-list"), "workA");
+      setupPicker(bInput, document.getElementById("b-list"), "workB");
+      applyModeUI();
       loadBoard();
       startTimer();
     });

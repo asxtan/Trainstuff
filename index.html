@@ -20,28 +20,46 @@
 </head>
 <body>
   <header class="topbar">
-    <div class="picker">
-      <div class="field">
-        <label for="from-input">From</label>
-        <input id="from-input" type="text" autocomplete="off" autocapitalize="words"
-               spellcheck="false" placeholder="Station" aria-label="From station" />
-        <ul id="from-list" class="suggestions" hidden></ul>
+    <div class="bar">
+      <div class="mode-toggle" role="tablist" aria-label="Direction">
+        <button id="mode-work" class="seg" type="button" role="tab">To work</button>
+        <button id="mode-home" class="seg" type="button" role="tab">To home</button>
       </div>
-
-      <button id="swap-btn" class="swap" type="button" aria-label="Reverse direction" title="Reverse">
-        &#8646;
+      <button id="settings-btn" class="gear" type="button" aria-label="Edit stations" aria-expanded="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
+    </div>
 
-      <div class="field">
-        <label for="to-input">To</label>
-        <input id="to-input" type="text" autocomplete="off" autocapitalize="words"
-               spellcheck="false" placeholder="Station" aria-label="To station" />
-        <ul id="to-list" class="suggestions" hidden></ul>
+    <div id="return-pick" class="return-pick" hidden>
+      <span class="rp-label">Returning from</span>
+      <div class="seg-group">
+        <button id="ret-a" class="seg" type="button"></button>
+        <button id="ret-b" class="seg" type="button"></button>
       </div>
     </div>
+
     <div class="status-line">
       <span id="route-label" class="route"></span>
       <span id="updated" class="updated"></span>
+    </div>
+
+    <div id="settings" class="settings" hidden>
+      <div class="field">
+        <label for="home-input">Home station</label>
+        <input id="home-input" type="text" autocomplete="off" autocapitalize="words" spellcheck="false" placeholder="Station" />
+        <ul id="home-list" class="suggestions" hidden></ul>
+      </div>
+      <div class="field">
+        <label for="a-input">Work station A</label>
+        <input id="a-input" type="text" autocomplete="off" autocapitalize="words" spellcheck="false" placeholder="Station" />
+        <ul id="a-list" class="suggestions" hidden></ul>
+      </div>
+      <div class="field">
+        <label for="b-input">Work station B</label>
+        <input id="b-input" type="text" autocomplete="off" autocapitalize="words" spellcheck="false" placeholder="Station" />
+        <ul id="b-list" class="suggestions" hidden></ul>
+      </div>
+      <button id="settings-done" class="seg done" type="button">Done</button>
     </div>
   </header>
 
