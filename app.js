@@ -210,16 +210,29 @@
     return svc.platform ? String(svc.platform) : "—";
   }
 
-  // Right-hand info chip: small label above a bold value. Value is set via
-  // textContent so data from the train API can never inject markup.
-  function badge(cls, label, value) {
+  // Simple side-view train glyph, developer-controlled (static) markup only.
+  var TRAIN_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="14" rx="3"/><line x1="4" y1="11" x2="20" y2="11"/><line x1="8" y1="17" x2="6" y2="21"/><line x1="16" y1="17" x2="18" y2="21"/></svg>';
+
+  // Right-hand info chip: small label above a bold value. The value is set via
+  // textContent so data from the train API can never inject markup; the icon is
+  // a fixed local SVG, not derived from any response.
+  function badge(cls, label, value, withIcon) {
     var wrap = document.createElement("div");
     wrap.className = cls;
     var lab = document.createElement("span");
     lab.className = "badge-label";
     lab.textContent = label;
     var val = document.createElement("b");
-    val.textContent = value;
+    if (withIcon) {
+      var ico = document.createElement("span");
+      ico.className = "ico";
+      ico.innerHTML = TRAIN_ICON;
+      val.appendChild(ico);
+    }
+    var num = document.createElement("span");
+    num.className = "num";
+    num.textContent = value;
+    val.appendChild(num);
     wrap.appendChild(lab);
     wrap.appendChild(val);
     return wrap;
@@ -274,7 +287,7 @@
         var plat = badge("plat", "Platform", platText(svc));
 
         var n = carsCount(svc);
-        var cars = badge("cars", n === 1 ? "Carriage" : "Carriages", n ? String(n) : "—");
+        var cars = badge("cars", n === 1 ? "Carriage" : "Carriages", n ? String(n) : "—", true);
 
         row.appendChild(time);
         row.appendChild(dest);
