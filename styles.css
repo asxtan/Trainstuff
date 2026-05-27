@@ -135,6 +135,7 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
+.field label .opt { text-transform: none; letter-spacing: 0; opacity: 0.75; }
 
 .field input {
   width: 100%;

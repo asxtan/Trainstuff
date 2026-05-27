@@ -43,7 +43,9 @@
     try {
       state.home = localStorage.getItem(KEYS.home) || CFG.DEFAULT_HOME || "ECR";
       state.workA = localStorage.getItem(KEYS.workA) || CFG.DEFAULT_WORK_A || "VIC";
-      state.workB = localStorage.getItem(KEYS.workB) || CFG.DEFAULT_WORK_B || "LBG";
+      // null = never set (use default); "" = explicitly cleared (one station).
+      var wb = localStorage.getItem(KEYS.workB);
+      state.workB = wb === null ? (CFG.DEFAULT_WORK_B || "LBG") : wb;
       state.ret = localStorage.getItem(KEYS.ret) === "B" ? "B" : "A";
     } catch (e) {
       state.home = CFG.DEFAULT_HOME || "ECR";
@@ -107,7 +109,7 @@
     return out.slice(0, 8);
   }
 
-  function setupPicker(input, listEl, key) {
+  function setupPicker(input, listEl, key, allowEmpty) {
     var activeIdx = -1, current = [];
 
     function close() { listEl.hidden = true; listEl.innerHTML = ""; activeIdx = -1; current = []; }
@@ -119,7 +121,16 @@
       state[key] = s.crs;
       saveSettings();
       close();
-      refreshLabels();
+      applyModeUI();
+      loadBoard();
+    }
+
+    function clearValue() {
+      state[key] = "";
+      input.value = "";
+      saveSettings();
+      close();
+      applyModeUI();
       loadBoard();
     }
 
@@ -164,13 +175,17 @@
     input.addEventListener("blur", function () {
       setTimeout(function () {
         var typed = input.value.trim().toLowerCase();
-        if (typed) {
-          for (var i = 0; i < stations.length; i++) {
-            var s = stations[i];
-            if (s.name.toLowerCase() === typed || s.crs.toLowerCase() === typed) {
-              if (s.crs !== state[key]) { choose(s); return; }
-              break;
-            }
+        if (!typed) {
+          if (allowEmpty && state[key]) { clearValue(); return; }
+          input.value = stationName(state[key]);
+          close();
+          return;
+        }
+        for (var i = 0; i < stations.length; i++) {
+          var s = stations[i];
+          if (s.name.toLowerCase() === typed || s.crs.toLowerCase() === typed) {
+            if (s.crs !== state[key]) { choose(s); return; }
+            break;
           }
         }
         input.value = stationName(state[key]);
@@ -180,6 +195,9 @@
   }
 
   // ---------------------------------------------------------------- labels / mode UI
+  // True when a distinct second work station is configured.
+  function hasWorkB() { return !!state.workB && state.workB !== state.workA; }
+
   function refreshLabels() {
     homeInput.value = stationName(state.home);
     aInput.value = stationName(state.workA);
@@ -190,18 +208,20 @@
     retBBtn.classList.toggle("active", state.ret === "B");
 
     if (state.mode === "work") {
-      routeLabel.textContent = stationName(state.home) + "  →  " +
-        stationName(state.workA) + " · " + stationName(state.workB);
+      routeLabel.textContent = stationName(state.home) + "  →  " + stationName(state.workA) +
+        (hasWorkB() ? " · " + stationName(state.workB) : "");
     } else {
-      var origin = state.ret === "B" ? state.workB : state.workA;
+      var origin = (hasWorkB() && state.ret === "B") ? state.workB : state.workA;
       routeLabel.textContent = stationName(origin) + "  →  " + stationName(state.home);
     }
   }
 
   function applyModeUI() {
+    // With only one work station there is no A/B choice to make.
+    if (!hasWorkB() && state.ret !== "A") { state.ret = "A"; saveSettings(); }
     modeWorkBtn.classList.toggle("active", state.mode === "work");
     modeHomeBtn.classList.toggle("active", state.mode === "home");
-    returnPick.hidden = state.mode !== "home";
+    returnPick.hidden = !(state.mode === "home" && hasWorkB());
     refreshLabels();
   }
 
@@ -375,10 +395,24 @@
       (err && err.message ? err.message : "network error") + ")", true);
   }
 
+  function loadSingle(from, to, myToken) {
+    var url = DEMO ? "sample_board.json" : depUrl(from, to);
+    return getJson(url).then(function (data) {
+      if (myToken !== fetchToken) return;
+      renderServices((data && data.trainServices) || [], false);
+      applyMeta(data);
+    }, function (err) {
+      if (myToken !== fetchToken) return;
+      onError(err);
+    });
+  }
+
   function loadBoard() {
     var myToken = ++fetchToken;
 
     if (state.mode === "work") {
+      // One work station → a plain board; two → a merged, tagged board.
+      if (!hasWorkB()) return loadSingle(state.home, state.workA, myToken);
       var ua = DEMO ? "sample_board.json" : depUrl(state.home, state.workA);
       var ub = DEMO ? "sample_board.json" : depUrl(state.home, state.workB);
       return Promise.all([
@@ -394,16 +428,8 @@
       });
     }
 
-    var origin = state.ret === "B" ? state.workB : state.workA;
-    var url = DEMO ? "sample_board.json" : depUrl(origin, state.home);
-    return getJson(url).then(function (data) {
-      if (myToken !== fetchToken) return;
-      renderServices((data && data.trainServices) || [], false);
-      applyMeta(data);
-    }, function (err) {
-      if (myToken !== fetchToken) return;
-      onError(err);
-    });
+    var origin = (hasWorkB() && state.ret === "B") ? state.workB : state.workA;
+    return loadSingle(origin, state.home, myToken);
   }
 
   // ---------------------------------------------------------------- wiring
@@ -464,7 +490,7 @@
       state.mode = deriveMode();
       setupPicker(homeInput, document.getElementById("home-list"), "home");
       setupPicker(aInput, document.getElementById("a-list"), "workA");
-      setupPicker(bInput, document.getElementById("b-list"), "workB");
+      setupPicker(bInput, document.getElementById("b-list"), "workB", true);
       applyModeUI();
       loadBoard();
       startTimer();
