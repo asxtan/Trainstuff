@@ -258,7 +258,55 @@
 
   function stripTags(s) { return String(s || "").replace(/<[^>]*>/g, "").trim(); }
 
+  // ---- journey time (from this train's calling points to the destination) ----
+  function toMinutes(hhmm) {
+    var m = /^(\d{1,2}):(\d{2})$/.exec((hhmm || "").trim());
+    return m ? (+m[1]) * 60 + (+m[2]) : null;
+  }
+
+  function callingPointAt(svc, toCrs) {
+    var scp = svc.subsequentCallingPoints;
+    if (!scp || !scp[0]) return null;
+    var cps = scp[0].callingPoint || scp[0]; // tolerate either shape
+    if (!cps || !cps.length) return null;
+    var target = (toCrs || "").toUpperCase();
+    for (var i = 0; i < cps.length; i++) {
+      if ((cps[i].crs || "").toUpperCase() === target) return cps[i];
+    }
+    return null;
+  }
+
+  // Minutes from this service's departure to its arrival at toCrs, or null.
+  function journeyMins(svc, toCrs) {
+    var dep = toMinutes(/^\d{1,2}:\d{2}$/.test(svc.etd || "") ? svc.etd : svc.std);
+    var cp = callingPointAt(svc, toCrs);
+    if (cp == null || dep == null) return null;
+    var arr = toMinutes(/^\d{1,2}:\d{2}$/.test(cp.et || "") ? cp.et : cp.st);
+    if (arr == null) return null;
+    var d = arr - dep;
+    if (d < 0) d += 24 * 60;        // crossed midnight
+    if (d < 0 || d > 12 * 60) return null; // ignore implausible values
+    return d;
+  }
+
+  function fmtJourney(mins) {
+    if (mins == null) return "—";
+    if (mins < 60) return mins + " min";
+    var h = Math.floor(mins / 60), m = mins % 60;
+    return h + "h" + (m ? " " + (m < 10 ? "0" : "") + m : "");
+  }
+
+  // Attach _jtext to each service: its journey time to toCrs.
+  function annotateJourney(data, toCrs) {
+    ((data && data.trainServices) || []).forEach(function (svc) {
+      svc._jtext = fmtJourney(journeyMins(svc, toCrs));
+    });
+    return data;
+  }
+
   var TRAIN_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="14" rx="3"/><line x1="4" y1="11" x2="20" y2="11"/><line x1="8" y1="17" x2="6" y2="21"/><line x1="16" y1="17" x2="18" y2="21"/></svg>';
+
+  var CLOCK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
 
   function showBanner(msg, isError) {
     if (!msg) { bannerEl.hidden = true; bannerEl.textContent = ""; return; }
@@ -288,6 +336,19 @@
     var b = document.createElement("b");
     b.textContent = platText(svc);
     line.appendChild(b);
+    return line;
+  }
+
+  function journeyLine(svc, cancelled) {
+    var line = document.createElement("div");
+    line.className = "journey-line";
+    var ico = document.createElement("span");
+    ico.className = "jico";
+    ico.innerHTML = CLOCK_ICON;
+    var txt = document.createElement("span");
+    txt.textContent = cancelled ? "—" : (svc._jtext || "—");
+    line.appendChild(ico);
+    line.appendChild(txt);
     return line;
   }
 
@@ -321,7 +382,11 @@
       dest.textContent = destName(svc) || (svc.operator || "");
       colMid.appendChild(dest);
     }
-    colMid.appendChild(platformLine(svc));
+    var meta = document.createElement("div");
+    meta.className = "mid-meta";
+    meta.appendChild(platformLine(svc));
+    meta.appendChild(journeyLine(svc, st.cancelled));
+    colMid.appendChild(meta);
 
     row.appendChild(colTime);
     row.appendChild(colMid);
@@ -385,7 +450,9 @@
   }
 
   function depUrl(from, to) {
-    return BASE + "/departures/" + encodeURIComponent(from) + "/to/" + encodeURIComponent(to) + "/" + NUM_ROWS;
+    // expand=true asks Huxley2 for calling points, which we use for journey time.
+    return BASE + "/departures/" + encodeURIComponent(from) + "/to/" + encodeURIComponent(to) +
+      "/" + NUM_ROWS + "?expand=true";
   }
 
   function onError(err) {
@@ -399,6 +466,7 @@
     var url = DEMO ? "sample_board.json" : depUrl(from, to);
     return getJson(url).then(function (data) {
       if (myToken !== fetchToken) return;
+      annotateJourney(data, to);
       renderServices((data && data.trainServices) || [], false);
       applyMeta(data);
     }, function (err) {
@@ -422,7 +490,9 @@
         if (myToken !== fetchToken) return;
         var a = res[0], b = res[1];
         if (a._err && b._err) { onError(a._err); return; }
-        var merged = mergeWork(a._err ? null : a, b._err ? null : b);
+        var da = a._err ? null : annotateJourney(a, state.workA);
+        var db = b._err ? null : annotateJourney(b, state.workB);
+        var merged = mergeWork(da, db);
         renderServices(merged.trainServices, true);
         applyMeta(merged);
       });

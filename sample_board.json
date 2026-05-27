@@ -18,7 +18,13 @@
       "operatorCode": "SN",
       "isCancelled": false,
       "length": 8,
-      "destination": [{ "locationName": "London Victoria", "crs": "VIC" }]
+      "destination": [{ "locationName": "London Victoria", "crs": "VIC" }],
+      "subsequentCallingPoints": [
+        { "callingPoint": [
+          { "locationName": "Clapham Junction", "crs": "CLJ", "st": "08:24", "et": "On time" },
+          { "locationName": "London Victoria", "crs": "VIC", "st": "08:31", "et": "On time" }
+        ] }
+      ]
     },
     {
       "std": "08:21",
@@ -29,7 +35,13 @@
       "isCancelled": false,
       "delayReason": "This train has been delayed by a signalling problem.",
       "length": 12,
-      "destination": [{ "locationName": "London Bridge", "crs": "LBG" }]
+      "destination": [{ "locationName": "London Bridge", "crs": "LBG" }],
+      "subsequentCallingPoints": [
+        { "callingPoint": [
+          { "locationName": "Norwood Junction", "crs": "NWD", "st": "08:33", "et": "08:41" },
+          { "locationName": "London Bridge", "crs": "LBG", "st": "08:43", "et": "08:51" }
+        ] }
+      ]
     },
     {
       "std": "08:27",
@@ -39,7 +51,13 @@
       "operatorCode": "SN",
       "isCancelled": false,
       "length": 0,
-      "destination": [{ "locationName": "London Victoria", "crs": "VIC" }]
+      "destination": [{ "locationName": "London Victoria", "crs": "VIC" }],
+      "subsequentCallingPoints": [
+        { "callingPoint": [
+          { "locationName": "Clapham Junction", "crs": "CLJ", "st": "08:37", "et": "On time" },
+          { "locationName": "London Victoria", "crs": "VIC", "st": "08:44", "et": "On time" }
+        ] }
+      ]
     },
     {
       "std": "08:33",
@@ -60,7 +78,12 @@
       "operatorCode": "GX",
       "isCancelled": false,
       "length": 8,
-      "destination": [{ "locationName": "London Victoria", "crs": "VIC" }]
+      "destination": [{ "locationName": "London Victoria", "crs": "VIC" }],
+      "subsequentCallingPoints": [
+        { "callingPoint": [
+          { "locationName": "London Victoria", "crs": "VIC", "st": "08:55", "et": "On time" }
+        ] }
+      ]
     },
     {
       "std": "08:45",
@@ -70,7 +93,13 @@
       "operatorCode": "SN",
       "isCancelled": false,
       "length": 10,
-      "destination": [{ "locationName": "London Victoria", "crs": "VIC" }]
+      "destination": [{ "locationName": "London Victoria", "crs": "VIC" }],
+      "subsequentCallingPoints": [
+        { "callingPoint": [
+          { "locationName": "Clapham Junction", "crs": "CLJ", "st": "08:54", "et": "08:57" },
+          { "locationName": "London Victoria", "crs": "VIC", "st": "09:01", "et": "09:04" }
+        ] }
+      ]
     }
   ]
 }
