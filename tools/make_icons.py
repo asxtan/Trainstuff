@@ -11,13 +11,13 @@ import zlib
 import os
 import math
 
-BG = (5, 9, 7)           # near-black background
-GLOW = (24, 150, 92)     # green glow behind the train
-BODY_TOP = (78, 240, 150)    # bright green (top of body gradient)
-BODY_BOT = (12, 120, 66)     # deep green (bottom of body gradient)
+BG = (255, 255, 255)     # white background
+GLOW = (70, 205, 130)    # green glow behind the train
+BODY_TOP = (74, 226, 142)    # bright green (top of body gradient)
+BODY_BOT = (10, 120, 64)     # deep green (bottom of body gradient)
 GLASS = (6, 18, 14)      # dark windscreen visor
-RIM = (150, 255, 200)    # bright mint rim / highlights
-LIGHT = (210, 255, 230)  # headlights
+RIM = (200, 255, 224)    # bright mint rim / highlights
+LIGHT = (224, 255, 238)  # headlights
 SKIRT = (7, 26, 18)      # underframe / wheels
 
 
@@ -36,7 +36,7 @@ def new_canvas(n):
         for x in range(n):
             d = math.hypot(x - cx, y - cy)
             t = max(0.0, 1.0 - d / maxd)
-            col = lerp(BG, GLOW, t * t * 0.28)
+            col = lerp(BG, GLOW, t * t * 0.16)
             i = (y * n + x) * 3
             buf[i:i + 3] = bytes(col)
     return buf
