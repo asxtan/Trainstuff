@@ -1,24 +1,45 @@
 #!/usr/bin/env python3
 """Generate the PWA icons (pure stdlib, no Pillow).
 
-Draws a simple front-of-train glyph on a solid theme background and writes
-icon-512.png, icon-192.png and apple-touch-icon.png (180px) to the repo root.
+Draws a sleek green front-of-train glyph on a black background (with a subtle
+green glow and a glossy body gradient) and writes icon-512.png, icon-192.png
+and apple-touch-icon.png (180px) to the repo root.
 Re-run after tweaking colours/shape: `python3 tools/make_icons.py`.
 """
 import struct
 import zlib
 import os
+import math
 
-BG = (11, 31, 23)        # #0b1f17  app theme (dark green)
-BODY = (245, 247, 250)   # #f5f7fa  train body (off-white)
-GLASS = (47, 111, 176)   # #2f6fb0  windscreen
-STRIPE = (31, 143, 95)   # #1f8f5f  cab stripe (accent green)
-LIGHT = (255, 209, 102)  # #ffd166  headlights
-SKIRT = (42, 49, 56)     # #2a3138  underframe / wheels
+BG = (5, 9, 7)           # near-black background
+GLOW = (24, 150, 92)     # green glow behind the train
+BODY_TOP = (78, 240, 150)    # bright green (top of body gradient)
+BODY_BOT = (12, 120, 66)     # deep green (bottom of body gradient)
+GLASS = (6, 18, 14)      # dark windscreen visor
+RIM = (150, 255, 200)    # bright mint rim / highlights
+LIGHT = (210, 255, 230)  # headlights
+SKIRT = (7, 26, 18)      # underframe / wheels
 
 
-def new_canvas(n, color):
-    return bytearray(color * (n * n))
+def lerp(a, b, t):
+    return (int(a[0] + (b[0] - a[0]) * t),
+            int(a[1] + (b[1] - a[1]) * t),
+            int(a[2] + (b[2] - a[2]) * t))
+
+
+def new_canvas(n):
+    """Black canvas with a soft radial green glow centred a little high."""
+    buf = bytearray(n * n * 3)
+    cx, cy = n * 0.5, n * 0.46
+    maxd = n * 0.62
+    for y in range(n):
+        for x in range(n):
+            d = math.hypot(x - cx, y - cy)
+            t = max(0.0, 1.0 - d / maxd)
+            col = lerp(BG, GLOW, t * t * 0.28)
+            i = (y * n + x) * 3
+            buf[i:i + 3] = bytes(col)
+    return buf
 
 
 def set_px(buf, n, x, y, color):
@@ -27,48 +48,54 @@ def set_px(buf, n, x, y, color):
         buf[i:i + 3] = bytes(color)
 
 
-def fill_rect(buf, n, x0, y0, x1, y1, color):
-    for y in range(int(y0), int(y1)):
-        for x in range(int(x0), int(x1)):
-            set_px(buf, n, x, y, color)
+def _corner_clipped(x, y, x0, y0, x1, y1, rt, rb):
+    """True if pixel falls outside a rounded corner (rt top, rb bottom)."""
+    cx = cy = r = None
+    if x < x0 + rt and y < y0 + rt:
+        cx, cy, r = x0 + rt, y0 + rt, rt
+    elif x >= x1 - rt and y < y0 + rt:
+        cx, cy, r = x1 - rt - 1, y0 + rt, rt
+    elif x < x0 + rb and y >= y1 - rb:
+        cx, cy, r = x0 + rb, y1 - rb - 1, rb
+    elif x >= x1 - rb and y >= y1 - rb:
+        cx, cy, r = x1 - rb - 1, y1 - rb - 1, rb
+    if cx is None:
+        return False
+    return (x - cx) ** 2 + (y - cy) ** 2 > r * r
 
 
 def fill_rrect(buf, n, x0, y0, x1, y1, color, r):
-    x0, y0, x1, y1, r = int(x0), int(y0), int(x1), int(y1), int(r)
+    fill_rrect_grad(buf, n, x0, y0, x1, y1, color, color, r, r)
+
+
+def fill_rrect_grad(buf, n, x0, y0, x1, y1, c_top, c_bot, rt, rb=None):
+    x0, y0, x1, y1, rt = int(x0), int(y0), int(x1), int(y1), int(rt)
+    rb = int(rb if rb is not None else rt)
+    span = max(1, y1 - y0)
     for y in range(y0, y1):
+        col = lerp(c_top, c_bot, (y - y0) / span)
         for x in range(x0, x1):
-            # corner clipping
-            cx = cy = None
-            if x < x0 + r and y < y0 + r:
-                cx, cy = x0 + r, y0 + r
-            elif x >= x1 - r and y < y0 + r:
-                cx, cy = x1 - r - 1, y0 + r
-            elif x < x0 + r and y >= y1 - r:
-                cx, cy = x0 + r, y1 - r - 1
-            elif x >= x1 - r and y >= y1 - r:
-                cx, cy = x1 - r - 1, y1 - r - 1
-            if cx is not None:
-                if (x - cx) ** 2 + (y - cy) ** 2 > r * r:
-                    continue
-            set_px(buf, n, x, y, color)
+            if _corner_clipped(x, y, x0, y0, x1, y1, rt, rb):
+                continue
+            set_px(buf, n, x, y, col)
 
 
 def draw_train(buf, n):
     s = float(n)
-    # body
-    fill_rrect(buf, n, 0.22 * s, 0.18 * s, 0.78 * s, 0.84 * s, BODY, 0.11 * s)
-    # windscreen (two panes split by a centre pillar)
-    fill_rrect(buf, n, 0.295 * s, 0.30 * s, 0.475 * s, 0.47 * s, GLASS, 0.03 * s)
-    fill_rrect(buf, n, 0.525 * s, 0.30 * s, 0.705 * s, 0.47 * s, GLASS, 0.03 * s)
-    # cab stripe
-    fill_rect(buf, n, 0.22 * s, 0.515 * s, 0.78 * s, 0.575 * s, STRIPE)
-    # headlights
-    fill_rrect(buf, n, 0.30 * s, 0.63 * s, 0.39 * s, 0.71 * s, LIGHT, 0.02 * s)
-    fill_rrect(buf, n, 0.61 * s, 0.63 * s, 0.70 * s, 0.71 * s, LIGHT, 0.02 * s)
-    # underframe + wheels
-    fill_rect(buf, n, 0.26 * s, 0.84 * s, 0.74 * s, 0.875 * s, SKIRT)
-    fill_rrect(buf, n, 0.30 * s, 0.855 * s, 0.40 * s, 0.91 * s, SKIRT, 0.04 * s)
-    fill_rrect(buf, n, 0.60 * s, 0.855 * s, 0.70 * s, 0.91 * s, SKIRT, 0.04 * s)
+    # aerodynamic body: rounded, very round on top, slight at the base
+    fill_rrect_grad(buf, n, 0.21 * s, 0.15 * s, 0.79 * s, 0.85 * s,
+                    BODY_TOP, BODY_BOT, 0.19 * s, 0.09 * s)
+    # wraparound windscreen visor
+    fill_rrect(buf, n, 0.29 * s, 0.26 * s, 0.71 * s, 0.45 * s, GLASS, 0.06 * s)
+    # bright rim line just under the visor
+    fill_rrect(buf, n, 0.30 * s, 0.475 * s, 0.70 * s, 0.50 * s, RIM, 0.012 * s)
+    # twin LED headlight strips
+    fill_rrect(buf, n, 0.30 * s, 0.60 * s, 0.43 * s, 0.645 * s, LIGHT, 0.018 * s)
+    fill_rrect(buf, n, 0.57 * s, 0.60 * s, 0.70 * s, 0.645 * s, LIGHT, 0.018 * s)
+    # darker skirt + two bogies peeking below
+    fill_rrect(buf, n, 0.25 * s, 0.80 * s, 0.75 * s, 0.85 * s, SKIRT, 0.02 * s)
+    fill_rrect(buf, n, 0.30 * s, 0.845 * s, 0.41 * s, 0.90 * s, SKIRT, 0.04 * s)
+    fill_rrect(buf, n, 0.59 * s, 0.845 * s, 0.70 * s, 0.90 * s, SKIRT, 0.04 * s)
 
 
 def write_png(path, n, buf):
@@ -88,7 +115,7 @@ def write_png(path, n, buf):
 
 
 def make(path, n):
-    buf = new_canvas(n, BG)
+    buf = new_canvas(n)
     draw_train(buf, n)
     write_png(path, n, buf)
     print("wrote", path, f"({n}x{n})")
