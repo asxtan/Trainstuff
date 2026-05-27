@@ -276,13 +276,20 @@
     return null;
   }
 
+  // Expected arrival time string ("HH:MM") at toCrs, preferring estimated.
+  function arrivalTime(svc, toCrs) {
+    var cp = callingPointAt(svc, toCrs);
+    if (!cp) return null;
+    if (/^\d{1,2}:\d{2}$/.test(cp.et || "")) return cp.et;
+    if (/^\d{1,2}:\d{2}$/.test(cp.st || "")) return cp.st;
+    return null;
+  }
+
   // Minutes from this service's departure to its arrival at toCrs, or null.
   function journeyMins(svc, toCrs) {
     var dep = toMinutes(/^\d{1,2}:\d{2}$/.test(svc.etd || "") ? svc.etd : svc.std);
-    var cp = callingPointAt(svc, toCrs);
-    if (cp == null || dep == null) return null;
-    var arr = toMinutes(/^\d{1,2}:\d{2}$/.test(cp.et || "") ? cp.et : cp.st);
-    if (arr == null) return null;
+    var arr = toMinutes(arrivalTime(svc, toCrs));
+    if (dep == null || arr == null) return null;
     var d = arr - dep;
     if (d < 0) d += 24 * 60;        // crossed midnight
     if (d < 0 || d > 12 * 60) return null; // ignore implausible values
@@ -290,23 +297,22 @@
   }
 
   function fmtJourney(mins) {
-    if (mins == null) return "—";
+    if (mins == null) return "";
     if (mins < 60) return mins + " min";
     var h = Math.floor(mins / 60), m = mins % 60;
     return h + "h" + (m ? " " + (m < 10 ? "0" : "") + m : "");
   }
 
-  // Attach _jtext to each service: its journey time to toCrs.
+  // Attach expected arrival (_arr) and journey time (_jtext) for the trip to toCrs.
   function annotateJourney(data, toCrs) {
     ((data && data.trainServices) || []).forEach(function (svc) {
+      svc._arr = arrivalTime(svc, toCrs) || "";
       svc._jtext = fmtJourney(journeyMins(svc, toCrs));
     });
     return data;
   }
 
   var TRAIN_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="14" rx="3"/><line x1="4" y1="11" x2="20" y2="11"/><line x1="8" y1="17" x2="6" y2="21"/><line x1="16" y1="17" x2="18" y2="21"/></svg>';
-
-  var CLOCK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
 
   function showBanner(msg, isError) {
     if (!msg) { bannerEl.hidden = true; bannerEl.textContent = ""; return; }
@@ -339,16 +345,19 @@
     return line;
   }
 
-  function journeyLine(svc, cancelled) {
+  // "→ 08:31 · 16 min" — expected arrival and journey, in the time column.
+  function arriveLine(svc, cancelled) {
     var line = document.createElement("div");
-    line.className = "journey-line";
-    var ico = document.createElement("span");
-    ico.className = "jico";
-    ico.innerHTML = CLOCK_ICON;
-    var txt = document.createElement("span");
-    txt.textContent = cancelled ? "—" : (svc._jtext || "—");
-    line.appendChild(ico);
-    line.appendChild(txt);
+    line.className = "arrive-line";
+    if (cancelled || !svc._arr) { line.textContent = "—"; return line; }
+    var arrow = document.createElement("span"); arrow.className = "arr-arrow"; arrow.textContent = "→";
+    var t = document.createElement("span"); t.className = "arr-time"; t.textContent = svc._arr;
+    line.appendChild(arrow);
+    line.appendChild(t);
+    if (svc._jtext) {
+      var j = document.createElement("span"); j.className = "arr-j"; j.textContent = "· " + svc._jtext;
+      line.appendChild(j);
+    }
     return line;
   }
 
@@ -357,13 +366,16 @@
     var row = document.createElement("div");
     row.className = "row" + (st.cancelled ? " is-cancelled" : "");
 
+    // Left column groups all the time info: departure, status, arrival + journey.
     var colTime = document.createElement("div");
     colTime.className = "col-time";
     var time = document.createElement("div"); time.className = "time";
     time.textContent = svc.std || svc.sta || "--:--";
     var exp = document.createElement("div"); exp.className = "expected " + st.cls;
     exp.textContent = st.text;
-    colTime.appendChild(time); colTime.appendChild(exp);
+    colTime.appendChild(time);
+    colTime.appendChild(exp);
+    colTime.appendChild(arriveLine(svc, st.cancelled));
 
     var colMid = document.createElement("div");
     colMid.className = "col-mid";
@@ -382,11 +394,7 @@
       dest.textContent = destName(svc) || (svc.operator || "");
       colMid.appendChild(dest);
     }
-    var meta = document.createElement("div");
-    meta.className = "mid-meta";
-    meta.appendChild(platformLine(svc));
-    meta.appendChild(journeyLine(svc, st.cancelled));
-    colMid.appendChild(meta);
+    colMid.appendChild(platformLine(svc));
 
     row.appendChild(colTime);
     row.appendChild(colMid);
