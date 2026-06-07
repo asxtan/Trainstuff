@@ -54,14 +54,9 @@ Everything tweakable lives in [`config.js`](config.js):
 ### Want your own data source?
 
 The public instance is run by a volunteer and could rate-limit or go down. To
-make it bulletproof, host your own backend and change the **one line**
-`HUXLEY_BASE_URL`:
-
-- Run [Huxley2](https://github.com/jpsingleton/Huxley2) yourself (free Darwin
-  "Rail Data Marketplace" token), or
-- Put a small Cloudflare Worker in front of Darwin that injects your token.
-
-Nothing else in the app changes.
+make it bulletproof, run [Huxley2](https://github.com/jpsingleton/Huxley2)
+yourself (free Darwin "Rail Data Marketplace" token) and change the **one line**
+`HUXLEY_BASE_URL`. Nothing else in the app changes.
 
 ## Notes & limitations
 
