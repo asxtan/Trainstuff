@@ -17,6 +17,22 @@
   <meta name="apple-mobile-web-app-title" content="Commute" />
 
   <link rel="stylesheet" href="styles.css" />
+
+  <!-- Resolve the saved theme before first paint to avoid a flash of the
+       wrong colours. "auto" follows the OS preference. -->
+  <script>
+    (function () {
+      try {
+        var pref = localStorage.getItem("cmt.theme") || "auto";
+        var dark = pref === "dark" ||
+          (pref === "auto" && window.matchMedia &&
+            window.matchMedia("(prefers-color-scheme: dark)").matches);
+        document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+        var meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.setAttribute("content", dark ? "#0b1f17" : "#eef3ef");
+      } catch (e) {}
+    })();
+  </script>
 </head>
 <body>
   <header class="topbar">
@@ -58,6 +74,14 @@
         <label for="b-input">Work station B <span class="opt">(optional — leave blank for one)</span></label>
         <input id="b-input" type="text" autocomplete="off" autocapitalize="words" spellcheck="false" placeholder="Optional" />
         <ul id="b-list" class="suggestions" hidden></ul>
+      </div>
+      <div class="theme-row">
+        <span class="field-label">Appearance</span>
+        <div id="theme-seg" class="theme-seg" role="radiogroup" aria-label="Appearance">
+          <button id="theme-auto" class="seg" type="button" role="radio">Auto</button>
+          <button id="theme-light" class="seg" type="button" role="radio">Light</button>
+          <button id="theme-dark" class="seg" type="button" role="radio">Dark</button>
+        </div>
       </div>
       <button id="settings-done" class="seg done" type="button">Done</button>
     </div>

@@ -8,7 +8,7 @@
   var MORNING_BEFORE = CFG.MORNING_BEFORE_HOUR == null ? 12 : CFG.MORNING_BEFORE_HOUR;
   var DEMO = /[?&]demo=1\b/.test(location.search);
 
-  var KEYS = { home: "cmt.home", workA: "cmt.workA", workB: "cmt.workB", ret: "cmt.ret" };
+  var KEYS = { home: "cmt.home", workA: "cmt.workA", workB: "cmt.workB", ret: "cmt.ret", theme: "cmt.theme" };
 
   // ---- DOM ----
   var modeWorkBtn = document.getElementById("mode-work");
@@ -27,11 +27,16 @@
   var homeInput = document.getElementById("home-input");
   var aInput = document.getElementById("a-input");
   var bInput = document.getElementById("b-input");
+  var themeBtns = {
+    auto: document.getElementById("theme-auto"),
+    light: document.getElementById("theme-light"),
+    dark: document.getElementById("theme-dark")
+  };
 
   // ---- state ----
   var stations = [];
   var nameByCrs = {};
-  var state = { home: "ECR", workA: "VIC", workB: "LBG", ret: "A", mode: "work" };
+  var state = { home: "ECR", workA: "VIC", workB: "LBG", ret: "A", mode: "work", theme: "auto" };
   var fetchToken = 0;
   var timer = null;
 
@@ -47,11 +52,14 @@
       var wb = localStorage.getItem(KEYS.workB);
       state.workB = wb === null ? (CFG.DEFAULT_WORK_B || "LBG") : wb;
       state.ret = localStorage.getItem(KEYS.ret) === "B" ? "B" : "A";
+      var th = localStorage.getItem(KEYS.theme);
+      state.theme = (th === "light" || th === "dark") ? th : "auto";
     } catch (e) {
       state.home = CFG.DEFAULT_HOME || "ECR";
       state.workA = CFG.DEFAULT_WORK_A || "VIC";
       state.workB = CFG.DEFAULT_WORK_B || "LBG";
       state.ret = "A";
+      state.theme = "auto";
     }
   }
 
@@ -61,7 +69,46 @@
       localStorage.setItem(KEYS.workA, state.workA);
       localStorage.setItem(KEYS.workB, state.workB);
       localStorage.setItem(KEYS.ret, state.ret);
+      localStorage.setItem(KEYS.theme, state.theme);
     } catch (e) { /* private mode */ }
+  }
+
+  // ---------------------------------------------------------------- theme
+  var darkQuery = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+
+  // Resolve the preference ("auto"/"light"/"dark") to the colours to paint.
+  function effectiveDark() {
+    if (state.theme === "dark") return true;
+    if (state.theme === "light") return false;
+    return darkQuery ? darkQuery.matches : true; // auto → follow the OS
+  }
+
+  function applyTheme() {
+    var dark = effectiveDark();
+    document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute("content", dark ? "#0b1f17" : "#eef3ef");
+    ["auto", "light", "dark"].forEach(function (k) {
+      var btn = themeBtns[k];
+      if (!btn) return;
+      var on = state.theme === k;
+      btn.classList.toggle("active", on);
+      btn.setAttribute("aria-checked", on ? "true" : "false");
+    });
+  }
+
+  function setTheme(t) {
+    if (state.theme === t) return;
+    state.theme = t;
+    saveSettings();
+    applyTheme();
+  }
+
+  // Repaint when the OS scheme changes and we're following it ("auto").
+  if (darkQuery) {
+    var onSchemeChange = function () { if (state.theme === "auto") applyTheme(); };
+    if (darkQuery.addEventListener) darkQuery.addEventListener("change", onSchemeChange);
+    else if (darkQuery.addListener) darkQuery.addListener(onSchemeChange);
   }
 
   function deriveMode() {
@@ -523,6 +570,10 @@
     state.ret = "B"; saveSettings(); refreshLabels(); loadBoard();
   });
 
+  themeBtns.auto.addEventListener("click", function () { setTheme("auto"); });
+  themeBtns.light.addEventListener("click", function () { setTheme("light"); });
+  themeBtns.dark.addEventListener("click", function () { setTheme("dark"); });
+
   settingsBtn.addEventListener("click", function () {
     var open = settingsPanel.hidden;
     settingsPanel.hidden = !open;
@@ -565,6 +616,7 @@
     .then(function () {
       stations.forEach(function (s) { nameByCrs[s.crs] = s.name; });
       loadSettings();
+      applyTheme();
       state.mode = deriveMode();
       setupPicker(homeInput, document.getElementById("home-list"), "home");
       setupPicker(aInput, document.getElementById("a-list"), "workA");
