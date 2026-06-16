@@ -6,8 +6,8 @@ var CACHE = "commute-board-v5";
 var SHELL = [
   "./",
   "./index.html",
-  "./styles.css",
-  "./app.js",
+  "./styles.css?v=5",
+  "./app.js?v=5",
   "./config.js",
   "./manifest.webmanifest",
   "./stations.json",
