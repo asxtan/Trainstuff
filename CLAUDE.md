@@ -13,8 +13,13 @@ expected arrival, journey time, platform, carriages) for a commute. No backend.
 - Keep chat replies concise; user prefers shorter responses.
 
 ## Data source
-- Public Huxley2 instance (Darwin LDBWS proxy): `HUXLEY_BASE_URL` in `config.js`
-  (`https://national-rail-api.davwheat.dev`). Called directly from the browser.
+- Public Huxley2 instances (Darwin LDBWS proxy): `HUXLEY_BASE_URLS` in `config.js`,
+  tried in order. Called directly from the browser. `apiJson()` fails over to the
+  next instance on a *transport* failure only (fetch rejects — down/DNS/CORS);
+  an HTTP status or bad JSON is flagged `err.reachable` and stops the walk, so a
+  404 for a typo'd CRS doesn't burn through the list. The first instance that
+  answers becomes `activeBase` for the session. These are community-run with no
+  uptime guarantee — an outage here is the most likely cause of a blank board.
 - Board: `/departures/{from}/to/{to}/{rows}?expand=true`. `expand=true` is needed
   for calling points → expected arrival + journey time. **Caveat:** if the live
   instance ignores `expand`, arrival/journey show "—" everywhere; fallback would

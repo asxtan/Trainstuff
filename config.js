@@ -3,6 +3,15 @@ window.CONFIG = {
   // Data source: a public, CORS-enabled Huxley2 instance (Darwin LDBWS proxy).
   // To use your own key/server later, point this at your self-hosted Huxley2
   // or a Cloudflare Worker that injects a Darwin Rail Data Marketplace token.
+  // Tried in order; the first one that answers is used for the rest of the
+  // session. These are shared community instances with no uptime guarantee, so
+  // more than one matters — when the primary goes down the board just stops.
+  HUXLEY_BASE_URLS: [
+    "https://national-rail-api.davwheat.dev",
+    "https://huxley2.azurewebsites.net"
+  ],
+
+  // Back-compat: honoured only if HUXLEY_BASE_URLS is absent.
   HUXLEY_BASE_URL: "https://national-rail-api.davwheat.dev",
 
   // First-run defaults only. Home and the two work stations are all editable

@@ -2,7 +2,12 @@
 
 (function () {
   var CFG = window.CONFIG || {};
-  var BASE = (CFG.HUXLEY_BASE_URL || "").replace(/\/+$/, "");
+  // Candidate Huxley2 instances, in preference order. activeBase sticks to
+  // whichever one last answered, so we don't re-walk the list on every refresh.
+  var BASES = (CFG.HUXLEY_BASE_URLS || [CFG.HUXLEY_BASE_URL] || [])
+    .filter(Boolean)
+    .map(function (u) { return String(u).replace(/\/+$/, ""); });
+  var activeBase = BASES[0] || "";
   var NUM_ROWS = CFG.NUM_ROWS || 8;
   var REFRESH_MS = CFG.REFRESH_MS || 45000;
   var MORNING_BEFORE = CFG.MORNING_BEFORE_HOUR == null ? 12 : CFG.MORNING_BEFORE_HOUR;
@@ -132,10 +137,10 @@
 
   var liveAbort = null;
   function liveSearch(query) {
-    if (DEMO || !BASE || query.trim().length < 3) return Promise.resolve([]);
+    if (DEMO || !activeBase || query.trim().length < 3) return Promise.resolve([]);
     if (liveAbort) liveAbort.abort();
     liveAbort = new AbortController();
-    var url = BASE + "/crs/" + encodeURIComponent(query.trim());
+    var url = activeBase + "/crs/" + encodeURIComponent(query.trim());
     return fetch(url, { signal: liveAbort.signal })
       .then(function (r) { return r.ok ? r.json() : []; })
       .then(function (data) {
@@ -501,9 +506,9 @@
   // browser: an unreachable/CORS-blocked host vs. an API that answered badly.
   function getJson(url) {
     return fetch(url, { cache: "no-store" }).then(function (r) {
-      if (!r.ok) throw new Error("API returned HTTP " + r.status + " " + (r.statusText || ""));
+      if (!r.ok) throw reachableErr("API returned HTTP " + r.status + " " + (r.statusText || ""));
       return r.json().catch(function () {
-        throw new Error("API sent a non-JSON reply");
+        throw reachableErr("API sent a non-JSON reply");
       });
     }, function () {
       // fetch() itself rejected: DNS, TLS, offline, or a missing CORS header.
@@ -511,14 +516,43 @@
     });
   }
 
+  // Flagged so apiJson keeps this instance instead of failing over: the server
+  // was reached, it just didn't like the request.
+  function reachableErr(msg) {
+    var e = new Error(msg);
+    e.reachable = true;
+    return e;
+  }
+
   function hostOf(url) {
     try { return new URL(url, location.href).host; } catch (e) { return "the data service"; }
   }
 
-  function depUrl(from, to) {
+  function depPath(from, to) {
     // expand=true asks Huxley2 for calling points, which we use for journey time.
-    return BASE + "/departures/" + encodeURIComponent(from) + "/to/" + encodeURIComponent(to) +
+    return "/departures/" + encodeURIComponent(from) + "/to/" + encodeURIComponent(to) +
       "/" + NUM_ROWS + "?expand=true";
+  }
+
+  // Fetch an API path, failing over to the next instance when one is
+  // unreachable. Only transport-level failures trigger failover — a 404 for a
+  // bad station code is a real answer and must not walk the whole list.
+  function apiJson(path) {
+    if (!BASES.length) return Promise.reject(new Error("no data service configured"));
+    var order = [activeBase].concat(BASES.filter(function (b) { return b !== activeBase; }));
+
+    function attempt(i) {
+      var base = order[i];
+      return getJson(base + path).then(function (data) {
+        activeBase = base;
+        return data;
+      }, function (err) {
+        if (err && err.reachable) throw err;          // instance answered; trust it
+        if (i + 1 >= order.length) throw err;         // nothing left to try
+        return attempt(i + 1);
+      });
+    }
+    return attempt(0);
   }
 
   function onError(err) {
@@ -529,8 +563,8 @@
   }
 
   function loadSingle(from, to, myToken) {
-    var url = DEMO ? "sample_board.json" : depUrl(from, to);
-    return getJson(url).then(function (data) {
+    var req = DEMO ? getJson("sample_board.json") : apiJson(depPath(from, to));
+    return req.then(function (data) {
       if (myToken !== fetchToken) return;
       annotateJourney(data, to);
       renderServices((data && data.trainServices) || [], false);
@@ -547,11 +581,11 @@
     if (state.mode === "work") {
       // One work station → a plain board; two → a merged, tagged board.
       if (!hasWorkB()) return loadSingle(state.home, state.workA, myToken);
-      var ua = DEMO ? "sample_board.json" : depUrl(state.home, state.workA);
-      var ub = DEMO ? "sample_board.json" : depUrl(state.home, state.workB);
+      var ra = DEMO ? getJson("sample_board.json") : apiJson(depPath(state.home, state.workA));
+      var rb = DEMO ? getJson("sample_board.json") : apiJson(depPath(state.home, state.workB));
       return Promise.all([
-        getJson(ua).then(function (d) { return d; }, function (e) { return { _err: e }; }),
-        getJson(ub).then(function (d) { return d; }, function (e) { return { _err: e }; })
+        ra.then(function (d) { return d; }, function (e) { return { _err: e }; }),
+        rb.then(function (d) { return d; }, function (e) { return { _err: e }; })
       ]).then(function (res) {
         if (myToken !== fetchToken) return;
         var a = res[0], b = res[1];

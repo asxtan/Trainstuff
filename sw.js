@@ -2,13 +2,13 @@
 // Strategy: network-first for our own app shell (so a new deploy shows up
 // immediately), falling back to cache when offline. Live train data (the
 // cross-origin Huxley2 API) is never handled here — it always hits the network.
-var CACHE = "commute-board-v7";
+var CACHE = "commute-board-v8";
 var SHELL = [
   "./",
   "./index.html",
   "./styles.css?v=6",
-  "./app.js?v=6",
-  "./config.js",
+  "./app.js?v=7",
+  "./config.js?v=2",
   "./manifest.webmanifest",
   "./stations.json",
   "./sample_board.json",
