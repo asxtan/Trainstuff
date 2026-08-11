@@ -8,7 +8,8 @@ window.CONFIG = {
   // more than one matters — when the primary goes down the board just stops.
   HUXLEY_BASE_URLS: [
     "https://national-rail-api.davwheat.dev",
-    "https://huxley2.azurewebsites.net"
+    "https://huxley2.azurewebsites.net",
+    "https://onrails.azurewebsites.net"
   ],
 
   // Back-compat: honoured only if HUXLEY_BASE_URLS is absent.

@@ -502,23 +502,33 @@
     return { trainServices: list, nrccMessages: nrcc };
   }
 
-  // Distinguish the failure modes that all surface as "Failed to fetch" in the
-  // browser: an unreachable/CORS-blocked host vs. an API that answered badly.
+  // Distinguish the failure modes that all surface as "Failed to fetch" (or, on
+  // WebKit, "Load failed") in the browser. Only a 4xx means *our request* was
+  // wrong; everything else means this instance is unhealthy and we should try
+  // the next one — including a 200 with an empty or non-JSON body, which is how
+  // a Huxley instance with a dead Darwin token typically fails.
   function getJson(url) {
     return fetch(url, { cache: "no-store" }).then(function (r) {
-      if (!r.ok) throw reachableErr("API returned HTTP " + r.status + " " + (r.statusText || ""));
+      if (!r.ok) {
+        var msg = "API returned HTTP " + r.status + " " + (r.statusText || "");
+        if (r.status >= 400 && r.status < 500) throw ourFaultErr(msg);
+        throw new Error(msg);
+      }
       return r.json().catch(function () {
-        throw reachableErr("API sent a non-JSON reply");
+        throw new Error("API at " + hostOf(url) + " sent an empty or non-JSON reply");
       });
     }, function () {
       // fetch() itself rejected: DNS, TLS, offline, or a missing CORS header.
+      // Note an error response without CORS headers also lands here, which is
+      // why a broken-but-reachable server can look identical to a dead one.
       throw new Error("can't reach " + hostOf(url) + " (offline, or the data service is down)");
     });
   }
 
-  // Flagged so apiJson keeps this instance instead of failing over: the server
-  // was reached, it just didn't like the request.
-  function reachableErr(msg) {
+  // Flagged so apiJson stops walking: the server answered and the fault is in
+  // the request (e.g. a station code that doesn't exist), so the next instance
+  // would only reject it the same way.
+  function ourFaultErr(msg) {
     var e = new Error(msg);
     e.reachable = true;
     return e;
