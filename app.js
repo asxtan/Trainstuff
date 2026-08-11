@@ -497,11 +497,22 @@
     return { trainServices: list, nrccMessages: nrcc };
   }
 
+  // Distinguish the failure modes that all surface as "Failed to fetch" in the
+  // browser: an unreachable/CORS-blocked host vs. an API that answered badly.
   function getJson(url) {
     return fetch(url, { cache: "no-store" }).then(function (r) {
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      return r.json();
+      if (!r.ok) throw new Error("API returned HTTP " + r.status + " " + (r.statusText || ""));
+      return r.json().catch(function () {
+        throw new Error("API sent a non-JSON reply");
+      });
+    }, function () {
+      // fetch() itself rejected: DNS, TLS, offline, or a missing CORS header.
+      throw new Error("can't reach " + hostOf(url) + " (offline, or the data service is down)");
     });
+  }
+
+  function hostOf(url) {
+    try { return new URL(url, location.href).host; } catch (e) { return "the data service"; }
   }
 
   function depUrl(from, to) {
@@ -513,8 +524,8 @@
   function onError(err) {
     var hadRows = boardEl.querySelector(".row");
     if (!hadRows) boardEl.innerHTML = '<p class="placeholder">Could not load departures.</p>';
-    showBanner("Couldn't reach the train data service — showing last known times. (" +
-      (err && err.message ? err.message : "network error") + ")", true);
+    showBanner("Departures didn't load — " +
+      (err && err.message ? err.message : "network error") + ".", true);
   }
 
   function loadSingle(from, to, myToken) {

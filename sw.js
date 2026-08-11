@@ -2,12 +2,12 @@
 // Strategy: network-first for our own app shell (so a new deploy shows up
 // immediately), falling back to cache when offline. Live train data (the
 // cross-origin Huxley2 API) is never handled here — it always hits the network.
-var CACHE = "commute-board-v6";
+var CACHE = "commute-board-v7";
 var SHELL = [
   "./",
   "./index.html",
   "./styles.css?v=6",
-  "./app.js?v=5",
+  "./app.js?v=6",
   "./config.js",
   "./manifest.webmanifest",
   "./stations.json",
@@ -47,7 +47,16 @@ self.addEventListener("fetch", function (e) {
       }
       return res;
     }).catch(function () {
-      return caches.match(req); // offline → serve last cached copy
+      // Offline → serve the last cached copy. caches.match resolves undefined
+      // for anything we never cached, and respondWith(undefined) rejects, so
+      // always hand back a real Response.
+      return caches.match(req).then(function (hit) {
+        return hit || new Response("Offline", {
+          status: 503,
+          statusText: "Offline",
+          headers: { "Content-Type": "text/plain" }
+        });
+      });
     })
   );
 });
