@@ -24,6 +24,10 @@ expected arrival, journey time, platform, carriages) for a commute. No backend.
   for calling points → expected arrival + journey time. **Caveat:** if the live
   instance ignores `expand`, arrival/journey show "—" everywhere; fallback would
   be a per-service details call. Station search: `/crs/{query}` (best-effort).
+- `to` is optional (`/departures/{from}/{rows}`) → an all-destinations board.
+- `timeOffset` / `timeWindow` (minutes) move the board off "now". **Darwin only
+  serves ±120 min**, so Trip mode clamps to it and explains itself in the banner
+  rather than silently showing the wrong trains.
 
 ## Files
 - `index.html` / `app.js` / `styles.css` — the app.
@@ -44,6 +48,18 @@ expected arrival, journey time, platform, carriages) for a commute. No backend.
     serviceID, time-sorted, each train tagged (blue = A, purple = B). One
     station: plain Home→A board.
   - To home: A|B return picker (hidden when only one work station) → origin→Home.
+- **Trip mode** (third segment) — a one-off lookup, not part of the commute:
+  From + optional To + optional "Leaving at" time, saved separately from the
+  commute stations. Blank To = every departure from that station (the row drops
+  its arrival line, since there's nothing to arrive at). With a time set, the
+  board opens ~10 min before it and the first departure at/after it is flagged
+  "Your train" (`.row.is-pick`) — that's the row whose platform you came for.
+  - `tripWindow()` returns `outOfWindow` based on the *requested time*, not the
+    shifted offset — the 10-min lead-in can be in range when the train isn't.
+  - Platforms are typically only assigned ~20 min out, so an in-window lookup
+    for later can legitimately show "—". The banner says so.
+- Station matching folds apostrophes/hyphens (`foldName`), so "kings cross"
+  finds "London King's Cross".
 - **Row layout:** left column = all time info (departure big, status, then
   "→ arrival · journey"); middle = destination/tags + platform (big number);
   right = carriages chip. Order chosen so it reads chronologically when delayed.

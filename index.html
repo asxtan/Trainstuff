@@ -16,7 +16,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Commute" />
 
-  <link rel="stylesheet" href="styles.css?v=6" />
+  <link rel="stylesheet" href="styles.css?v=7" />
 
   <!-- Resolve the saved theme before first paint to avoid a flash of the
        wrong colours. "auto" follows the OS preference. -->
@@ -40,6 +40,7 @@
       <div class="mode-toggle" role="tablist" aria-label="Direction">
         <button id="mode-work" class="seg" type="button" role="tab">To work</button>
         <button id="mode-home" class="seg" type="button" role="tab">To home</button>
+        <button id="mode-trip" class="seg" type="button" role="tab">Trip</button>
       </div>
       <button id="refresh-btn" type="button" class="icon-btn refresh" aria-label="Refresh">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
@@ -54,6 +55,29 @@
       <div class="seg-group">
         <button id="ret-a" class="seg" type="button"></button>
         <button id="ret-b" class="seg" type="button"></button>
+      </div>
+    </div>
+
+    <!-- One-off journey lookup: any two stations, at any time in Darwin's window. -->
+    <div id="trip-pick" class="trip-pick" hidden>
+      <div class="trip-row">
+        <div class="field">
+          <label for="trip-from-input">From</label>
+          <input id="trip-from-input" type="text" autocomplete="off" autocapitalize="words" spellcheck="false" placeholder="Station" />
+          <ul id="trip-from-list" class="suggestions" hidden></ul>
+        </div>
+        <div class="field">
+          <label for="trip-to-input">To <span class="opt">(optional)</span></label>
+          <input id="trip-to-input" type="text" autocomplete="off" autocapitalize="words" spellcheck="false" placeholder="Anywhere" />
+          <ul id="trip-to-list" class="suggestions" hidden></ul>
+        </div>
+      </div>
+      <div class="trip-row time-row">
+        <div class="field">
+          <label for="trip-time-input">Leaving at</label>
+          <input id="trip-time-input" type="time" step="60" />
+        </div>
+        <button id="trip-now" class="seg trip-now" type="button">Now</button>
       </div>
     </div>
 
@@ -101,7 +125,7 @@
   </footer>
 
   <script src="config.js?v=3"></script>
-  <script src="app.js?v=8"></script>
+  <script src="app.js?v=9"></script>
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", function () {

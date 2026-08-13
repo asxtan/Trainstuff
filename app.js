@@ -13,11 +13,25 @@
   var MORNING_BEFORE = CFG.MORNING_BEFORE_HOUR == null ? 12 : CFG.MORNING_BEFORE_HOUR;
   var DEMO = /[?&]demo=1\b/.test(location.search);
 
-  var KEYS = { home: "cmt.home", workA: "cmt.workA", workB: "cmt.workB", ret: "cmt.ret", theme: "cmt.theme" };
+  // Darwin publishes departure boards for roughly ±2 hours around now; asking
+  // for anything outside that window is rejected, so trip lookups clamp to it.
+  var DARWIN_WINDOW = 120;
+  var TRIP_ROWS = Math.max(CFG.NUM_ROWS || 8, 10);
+
+  var KEYS = {
+    home: "cmt.home", workA: "cmt.workA", workB: "cmt.workB", ret: "cmt.ret", theme: "cmt.theme",
+    tripFrom: "cmt.tripFrom", tripTo: "cmt.tripTo", tripTime: "cmt.tripTime"
+  };
 
   // ---- DOM ----
   var modeWorkBtn = document.getElementById("mode-work");
   var modeHomeBtn = document.getElementById("mode-home");
+  var modeTripBtn = document.getElementById("mode-trip");
+  var tripPick = document.getElementById("trip-pick");
+  var tripFromInput = document.getElementById("trip-from-input");
+  var tripToInput = document.getElementById("trip-to-input");
+  var tripTimeInput = document.getElementById("trip-time-input");
+  var tripNowBtn = document.getElementById("trip-now");
   var settingsBtn = document.getElementById("settings-btn");
   var settingsPanel = document.getElementById("settings");
   var settingsDone = document.getElementById("settings-done");
@@ -41,7 +55,12 @@
   // ---- state ----
   var stations = [];
   var nameByCrs = {};
-  var state = { home: "ECR", workA: "VIC", workB: "LBG", ret: "A", mode: "work", theme: "auto" };
+  var state = {
+    home: "ECR", workA: "VIC", workB: "LBG", ret: "A", mode: "work", theme: "auto",
+    // Ad-hoc lookup ("Trip"): any origin, an optional destination filter, and an
+    // optional clock time ("" = right now).
+    tripFrom: "", tripTo: "", tripTime: ""
+  };
   var fetchToken = 0;
   var timer = null;
 
@@ -59,13 +78,27 @@
       state.ret = localStorage.getItem(KEYS.ret) === "B" ? "B" : "A";
       var th = localStorage.getItem(KEYS.theme);
       state.theme = (th === "light" || th === "dark") ? th : "auto";
+      // A trip is a one-off, so it starts from home rather than a stored default.
+      state.tripFrom = localStorage.getItem(KEYS.tripFrom) || state.home;
+      state.tripTo = localStorage.getItem(KEYS.tripTo) || "";
+      state.tripTime = normTime(localStorage.getItem(KEYS.tripTime));
     } catch (e) {
       state.home = CFG.DEFAULT_HOME || "ECR";
       state.workA = CFG.DEFAULT_WORK_A || "VIC";
       state.workB = CFG.DEFAULT_WORK_B || "LBG";
       state.ret = "A";
       state.theme = "auto";
+      state.tripFrom = state.home;
+      state.tripTo = "";
+      state.tripTime = "";
     }
+  }
+
+  // Accept only "HH:MM"; anything else (including null) means "now".
+  function normTime(v) {
+    var m = /^(\d{1,2}):(\d{2})$/.exec(String(v || "").trim());
+    if (!m || +m[1] > 23 || +m[2] > 59) return "";
+    return pad(+m[1]) + ":" + m[2];
   }
 
   function saveSettings() {
@@ -75,6 +108,9 @@
       localStorage.setItem(KEYS.workB, state.workB);
       localStorage.setItem(KEYS.ret, state.ret);
       localStorage.setItem(KEYS.theme, state.theme);
+      localStorage.setItem(KEYS.tripFrom, state.tripFrom);
+      localStorage.setItem(KEYS.tripTo, state.tripTo);
+      localStorage.setItem(KEYS.tripTime, state.tripTime);
     } catch (e) { /* private mode */ }
   }
 
@@ -121,13 +157,19 @@
   }
 
   // ---------------------------------------------------------------- pickers
+  // Fold case and punctuation, so "kings cross" finds "London King's Cross" —
+  // phone keyboards and autocorrect are inconsistent about the apostrophe.
+  function foldName(s) {
+    return String(s || "").toLowerCase().replace(/[’'`.\-]/g, "");
+  }
+
   function localMatches(query) {
-    var q = query.trim().toLowerCase();
+    var q = foldName(query.trim());
     if (!q) return stations.slice(0, 8);
     var starts = [], contains = [];
     for (var i = 0; i < stations.length; i++) {
       var s = stations[i];
-      var name = s.name.toLowerCase(), crs = s.crs.toLowerCase();
+      var name = foldName(s.name), crs = s.crs.toLowerCase();
       if (crs === q) { starts.unshift(s); continue; }
       if (name.indexOf(q) === 0 || crs.indexOf(q) === 0) starts.push(s);
       else if (name.indexOf(q) !== -1) contains.push(s);
@@ -226,7 +268,7 @@
     });
     input.addEventListener("blur", function () {
       setTimeout(function () {
-        var typed = input.value.trim().toLowerCase();
+        var typed = foldName(input.value.trim());
         if (!typed) {
           if (allowEmpty && state[key]) { clearValue(); return; }
           input.value = stationName(state[key]);
@@ -235,7 +277,7 @@
         }
         for (var i = 0; i < stations.length; i++) {
           var s = stations[i];
-          if (s.name.toLowerCase() === typed || s.crs.toLowerCase() === typed) {
+          if (foldName(s.name) === typed || s.crs.toLowerCase() === typed) {
             if (s.crs !== state[key]) { choose(s); return; }
             break;
           }
@@ -259,9 +301,18 @@
     retABtn.classList.toggle("active", state.ret === "A");
     retBBtn.classList.toggle("active", state.ret === "B");
 
+    tripFromInput.value = stationName(state.tripFrom);
+    tripToInput.value = stationName(state.tripTo);
+    tripTimeInput.value = state.tripTime;
+    tripNowBtn.classList.toggle("active", !state.tripTime);
+
     if (state.mode === "work") {
       routeLabel.textContent = stationName(state.home) + "  →  " + stationName(state.workA) +
         (hasWorkB() ? " · " + stationName(state.workB) : "");
+    } else if (state.mode === "trip") {
+      routeLabel.textContent = (stationName(state.tripFrom) || "Pick a station") +
+        (state.tripTo ? "  →  " + stationName(state.tripTo) : "") +
+        (state.tripTime ? "  ·  " + state.tripTime : "");
     } else {
       var origin = (hasWorkB() && state.ret === "B") ? state.workB : state.workA;
       routeLabel.textContent = stationName(origin) + "  →  " + stationName(state.home);
@@ -273,7 +324,9 @@
     if (!hasWorkB() && state.ret !== "A") { state.ret = "A"; saveSettings(); }
     modeWorkBtn.classList.toggle("active", state.mode === "work");
     modeHomeBtn.classList.toggle("active", state.mode === "home");
+    modeTripBtn.classList.toggle("active", state.mode === "trip");
     returnPick.hidden = !(state.mode === "home" && hasWorkB());
+    tripPick.hidden = state.mode !== "trip";
     refreshLabels();
   }
 
@@ -356,12 +409,34 @@
   }
 
   // Attach expected arrival (_arr) and journey time (_jtext) for the trip to toCrs.
+  // With no toCrs (an all-destinations board) there is nothing to arrive at, so
+  // the row drops the arrival line rather than printing an empty one.
   function annotateJourney(data, toCrs) {
     ((data && data.trainServices) || []).forEach(function (svc) {
+      svc._noDest = !toCrs;
       svc._arr = arrivalTime(svc, toCrs) || "";
       svc._jtext = fmtJourney(journeyMins(svc, toCrs));
     });
     return data;
+  }
+
+  // Flag the departure that answers "the 19:00" — the first one at or after the
+  // requested time. The board can span two hours, so the match needs marking.
+  function markPick(services, hhmm) {
+    var target = toMinutes(hhmm);
+    if (target == null) return;
+    var best = null, bestDiff = null;
+    services.forEach(function (svc) {
+      svc._pick = false;
+      var t = toMinutes(svc.std || svc.sta);
+      if (t == null) return;
+      var d = t - target;
+      if (d < -12 * 60) d += 24 * 60;        // board crossed midnight
+      if (d < 0) return;                     // gone before the requested time
+      if (bestDiff === null || d < bestDiff) { bestDiff = d; best = svc; }
+    });
+    // Only claim a match if something leaves within the hour after the target.
+    if (best && bestDiff <= 60) best._pick = true;
   }
 
   var TRAIN_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="14" rx="3"/><line x1="4" y1="11" x2="20" y2="11"/><line x1="8" y1="17" x2="6" y2="21"/><line x1="16" y1="17" x2="18" y2="21"/></svg>';
@@ -398,7 +473,9 @@
   }
 
   // "→ 08:31 · 16 min" — expected arrival and journey, in the time column.
+  // Returns null when there's no destination to arrive at.
   function arriveLine(svc, cancelled) {
+    if (svc._noDest) return null;
     var line = document.createElement("div");
     line.className = "arrive-line";
     if (cancelled || !svc._arr) { line.textContent = "—"; return line; }
@@ -416,7 +493,7 @@
   function buildRow(svc, isWork) {
     var st = statusInfo(svc);
     var row = document.createElement("div");
-    row.className = "row" + (st.cancelled ? " is-cancelled" : "");
+    row.className = "row" + (st.cancelled ? " is-cancelled" : "") + (svc._pick ? " is-pick" : "");
 
     // Left column groups all the time info: departure, status, arrival + journey.
     var colTime = document.createElement("div");
@@ -427,10 +504,17 @@
     exp.textContent = st.text;
     colTime.appendChild(time);
     colTime.appendChild(exp);
-    colTime.appendChild(arriveLine(svc, st.cancelled));
+    var arr = arriveLine(svc, st.cancelled);
+    if (arr) colTime.appendChild(arr);
 
     var colMid = document.createElement("div");
     colMid.className = "col-mid";
+    if (svc._pick) {
+      var flag = document.createElement("div");
+      flag.className = "pick-flag";
+      flag.textContent = "Your train";
+      colMid.appendChild(flag);
+    }
     if (isWork) {
       var tags = document.createElement("div");
       tags.className = "tags";
@@ -466,9 +550,12 @@
     services.forEach(function (svc) { boardEl.appendChild(buildRow(svc, isWork)); });
   }
 
-  function applyMeta(data) {
+  function applyMeta(data, notice) {
     var msgs = (data && data.nrccMessages) || [];
-    if (msgs.length) showBanner(stripTags(msgs[0].value || msgs[0].xhtmlMessage || msgs[0]), DEMO);
+    // A trip notice explains the board you're looking at, so it outranks the
+    // generic disruption message.
+    if (notice) showBanner(notice, false);
+    else if (msgs.length) showBanner(stripTags(msgs[0].value || msgs[0].xhtmlMessage || msgs[0]), DEMO);
     else showBanner(null);
     var now = new Date();
     updatedEl.textContent = "Updated " + pad(now.getHours()) + ":" + pad(now.getMinutes());
@@ -538,10 +625,67 @@
     try { return new URL(url, location.href).host; } catch (e) { return "the data service"; }
   }
 
-  function depPath(from, to) {
+  // opts: { rows, offset, window }. `to` is optional — without it Huxley returns
+  // every departure from `from` instead of only those calling at a destination.
+  function depPath(from, to, opts) {
+    opts = opts || {};
+    var rows = opts.rows || NUM_ROWS;
+    var path = "/departures/" + encodeURIComponent(from) +
+      (to ? "/to/" + encodeURIComponent(to) : "") + "/" + rows;
     // expand=true asks Huxley2 for calling points, which we use for journey time.
-    return "/departures/" + encodeURIComponent(from) + "/to/" + encodeURIComponent(to) +
-      "/" + NUM_ROWS + "?expand=true";
+    var q = "?expand=true";
+    if (opts.offset) q += "&timeOffset=" + opts.offset;
+    if (opts.window) q += "&timeWindow=" + opts.window;
+    return path + q;
+  }
+
+  // ---- trip timing ----------------------------------------------------------
+  // Minutes from now until the next occurrence of "HH:MM". A time more than two
+  // hours in the past is unreachable on Darwin either way, so read it as
+  // tomorrow rather than as a board we can never fetch.
+  function minsUntil(hhmm) {
+    var t = toMinutes(hhmm);
+    if (t == null) return null;
+    var now = new Date();
+    var d = t - (now.getHours() * 60 + now.getMinutes());
+    if (d < -DARWIN_WINDOW) d += 24 * 60;
+    return d;
+  }
+
+  // Where to point the board for the requested time, and whether Darwin can
+  // actually reach it. Starts ~10 min early so the target train isn't row one.
+  // outOfWindow tracks the requested time, not the shifted offset: the 10-minute
+  // lead-in can still be in range when the train itself is past the horizon.
+  function tripWindow() {
+    var ahead = minsUntil(state.tripTime);
+    if (ahead == null) return { offset: 0, window: DARWIN_WINDOW, ahead: null, outOfWindow: false };
+    var offset = Math.max(-DARWIN_WINDOW, Math.min(DARWIN_WINDOW, ahead - 10));
+    return {
+      offset: offset,
+      window: DARWIN_WINDOW,
+      ahead: ahead,
+      outOfWindow: ahead > DARWIN_WINDOW || ahead < -DARWIN_WINDOW
+    };
+  }
+
+  // Explain, in the banner, why a requested time might not be on the board yet —
+  // and why the platform can still read "—" when it is.
+  function tripNotice(win) {
+    if (win.ahead == null) return null;
+    if (win.outOfWindow && win.ahead > DARWIN_WINDOW) {
+      return "National Rail only publishes departures about 2 hours ahead, so the " +
+        state.tripTime + " isn't listed yet — showing the furthest ahead available. " +
+        "Check back after " + clockAt(win.ahead - DARWIN_WINDOW) + ".";
+    }
+    if (win.outOfWindow) return "That time is outside the 2-hour window National Rail publishes.";
+    if (win.ahead > 25) return "Platforms are usually confirmed 10–20 minutes before departure.";
+    return null;
+  }
+
+  // Clock time `mins` from now, as "HH:MM".
+  function clockAt(mins) {
+    var d = new Date(Date.now() + mins * 60000);
+    return pad(d.getHours()) + ":" + pad(d.getMinutes());
   }
 
   // Fetch an API path, failing over to the next instance when one is
@@ -572,21 +716,42 @@
       (err && err.message ? err.message : "network error") + ".", true);
   }
 
-  function loadSingle(from, to, myToken) {
-    var req = DEMO ? getJson("sample_board.json") : apiJson(depPath(from, to));
+  function loadSingle(from, to, myToken, opts) {
+    opts = opts || {};
+    var req = DEMO ? getJson("sample_board.json") : apiJson(depPath(from, to, opts));
     return req.then(function (data) {
       if (myToken !== fetchToken) return;
       annotateJourney(data, to);
-      renderServices((data && data.trainServices) || [], false);
-      applyMeta(data);
+      var services = (data && data.trainServices) || [];
+      if (opts.pickTime) markPick(services, opts.pickTime);
+      renderServices(services, false);
+      applyMeta(data, opts.notice);
     }, function (err) {
       if (myToken !== fetchToken) return;
       onError(err);
     });
   }
 
+  function loadTrip(myToken) {
+    if (!state.tripFrom) {
+      boardEl.innerHTML = '<p class="placeholder">Pick a station to leave from.</p>';
+      showBanner(null);
+      return Promise.resolve();
+    }
+    var win = tripWindow();
+    return loadSingle(state.tripFrom, state.tripTo, myToken, {
+      rows: TRIP_ROWS,
+      offset: win.offset,
+      window: win.window,
+      pickTime: state.tripTime,
+      notice: tripNotice(win)
+    });
+  }
+
   function loadBoard() {
     var myToken = ++fetchToken;
+
+    if (state.mode === "trip") return loadTrip(myToken);
 
     if (state.mode === "work") {
       // One work station → a plain board; two → a merged, tagged board.
@@ -615,6 +780,18 @@
   // ---------------------------------------------------------------- wiring
   modeWorkBtn.addEventListener("click", function () { setMode("work"); });
   modeHomeBtn.addEventListener("click", function () { setMode("home"); });
+  modeTripBtn.addEventListener("click", function () { setMode("trip"); });
+
+  function setTripTime(v) {
+    var t = normTime(v);
+    if (t === state.tripTime) return;
+    state.tripTime = t;
+    saveSettings();
+    refreshLabels();
+    loadBoard();
+  }
+  tripTimeInput.addEventListener("change", function () { setTripTime(tripTimeInput.value); });
+  tripNowBtn.addEventListener("click", function () { setTripTime(""); });
 
   retABtn.addEventListener("click", function () {
     if (state.ret === "A") return;
@@ -676,6 +853,8 @@
       setupPicker(homeInput, document.getElementById("home-list"), "home");
       setupPicker(aInput, document.getElementById("a-list"), "workA");
       setupPicker(bInput, document.getElementById("b-list"), "workB", true);
+      setupPicker(tripFromInput, document.getElementById("trip-from-list"), "tripFrom");
+      setupPicker(tripToInput, document.getElementById("trip-to-list"), "tripTo", true);
       applyModeUI();
       loadBoard();
       startTimer();
