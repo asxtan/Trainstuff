@@ -16,6 +16,8 @@
   // Darwin publishes departure boards for roughly ±2 hours around now; asking
   // for anything outside that window is rejected, so trip lookups clamp to it.
   var DARWIN_WINDOW = 120;
+  var RETRY_MS = 900;          // pause before one more sweep of the instances
+  var FETCH_TIMEOUT_MS = 8000; // give up on a stalled instance and try the next
   var TRIP_ROWS = Math.max(CFG.NUM_ROWS || 8, 10);
 
   var KEYS = {
@@ -63,7 +65,6 @@
   };
   var fetchToken = 0;
   var timer = null;
-  var boardAbort = null;
 
   function stationName(crs) { return nameByCrs[crs] || crs || ""; }
   function pad(n) { return (n < 10 ? "0" : "") + n; }
@@ -424,11 +425,13 @@
   // Flag the departure that answers "the 19:00" — the first one at or after the
   // requested time. The board can span two hours, so the match needs marking.
   function markPick(services, hhmm) {
+    // Always clear first: a cached board may still carry the flag from the time
+    // it was last looked up under.
+    services.forEach(function (svc) { svc._pick = false; });
     var target = toMinutes(hhmm);
     if (target == null) return;
     var best = null, bestDiff = null;
     services.forEach(function (svc) {
-      svc._pick = false;
       var t = toMinutes(svc.std || svc.sta);
       if (t == null) return;
       var d = t - target;
@@ -551,14 +554,16 @@
     services.forEach(function (svc) { boardEl.appendChild(buildRow(svc, isWork)); });
   }
 
-  function applyMeta(data, notice) {
+  function applyMeta(data, notice, at) {
     var msgs = (data && data.nrccMessages) || [];
     // A trip notice explains the board you're looking at, so it outranks the
     // generic disruption message.
     if (notice) showBanner(notice, false);
     else if (msgs.length) showBanner(stripTags(msgs[0].value || msgs[0].xhtmlMessage || msgs[0]), DEMO);
     else showBanner(null);
-    var now = new Date();
+    // Stamp when the data was fetched, not when it was painted — a board served
+    // from cache must not claim to be newer than it is.
+    var now = new Date(at || Date.now());
     updatedEl.textContent = "Updated " + pad(now.getHours()) + ":" + pad(now.getMinutes());
     updatedEl.classList.remove("flash");
     void updatedEl.offsetWidth;
@@ -595,26 +600,48 @@
   // wrong; everything else means this instance is unhealthy and we should try
   // the next one — including a 200 with an empty or non-JSON body, which is how
   // a Huxley instance with a dead Darwin token typically fails.
-  function getJson(url, signal) {
-    return fetch(url, { cache: "no-store", signal: signal }).then(function (r) {
+  // A stalled instance is worse than a failing one: without a deadline the board
+  // sits on "Loading…" indefinitely, which is what a flaky mobile connection or a
+  // half-open connection to a sleeping Azure app looks like. Time out and let the
+  // caller fail over to the next instance.
+  function withTimeout(url, ms) {
+    if (typeof AbortController !== "function") return fetch(url, { cache: "no-store" });
+    var ac = new AbortController();
+    var t = setTimeout(function () { ac.abort(); }, ms);
+    return fetch(url, { cache: "no-store", signal: ac.signal }).then(function (r) {
+      clearTimeout(t);
+      return r;
+    }, function (err) {
+      clearTimeout(t);
+      throw err;
+    });
+  }
+
+  function getJson(url) {
+    return withTimeout(url, FETCH_TIMEOUT_MS).then(function (r) {
       if (!r.ok) {
         var msg = "API returned HTTP " + r.status + " " + (r.statusText || "");
-        if (r.status >= 400 && r.status < 500) throw ourFaultErr(msg);
+        // 401/403/408/429 are about the *instance* — an expired or over-quota
+        // Darwin token, or us asking too fast — not about our request, so the
+        // next instance is worth a try. Only a genuinely bad request (400/404,
+        // e.g. a station code that doesn't exist) stops the walk.
+        if (r.status >= 400 && r.status < 500 && !INSTANCE_FAULT[r.status]) throw ourFaultErr(msg);
         throw new Error(msg);
       }
       return r.json().catch(function () {
         throw new Error("API at " + hostOf(url) + " sent an empty or non-JSON reply");
       });
-    }, function (err) {
-      // A board we've navigated away from: not a fault, and not a reason to try
-      // another instance. Flagged so apiJson stops walking the list.
-      if (signal && signal.aborted) throw ourFaultErr("aborted");
+    }, function () {
       // fetch() itself rejected: DNS, TLS, offline, or a missing CORS header.
       // Note an error response without CORS headers also lands here, which is
       // why a broken-but-reachable server can look identical to a dead one.
       throw new Error("can't reach " + hostOf(url) + " (offline, or the data service is down)");
     });
   }
+
+  // Statuses that mean "this instance can't serve us right now" rather than
+  // "your request was wrong": worth failing over, and worth one retry.
+  var INSTANCE_FAULT = { 401: 1, 403: 1, 408: 1, 429: 1 };
 
   // Flagged so apiJson stops walking: the server answered and the fault is in
   // the request (e.g. a station code that doesn't exist), so the next instance
@@ -695,49 +722,119 @@
   // Fetch an API path, failing over to the next instance when one is
   // unreachable. Only transport-level failures trigger failover — a 404 for a
   // bad station code is a real answer and must not walk the whole list.
-  function apiJson(path, signal) {
+  function apiJson(path) {
     if (!BASES.length) return Promise.reject(new Error("no data service configured"));
     var order = [activeBase].concat(BASES.filter(function (b) { return b !== activeBase; }));
 
-    function attempt(i) {
+    function attempt(i, pass) {
       var base = order[i];
-      return getJson(base + path, signal).then(function (data) {
+      return getJson(base + path).then(function (data) {
         activeBase = base;
         return data;
       }, function (err) {
         if (err && err.reachable) throw err;          // instance answered; trust it
-        if (i + 1 >= order.length) throw err;         // nothing left to try
-        return attempt(i + 1);
+        if (i + 1 < order.length) return attempt(i + 1, pass);
+        // Every instance failed. These are shared community servers that flake
+        // under bursts, so give the list one more go after a short pause before
+        // telling the user the board is broken.
+        if (pass > 0) throw err;
+        return delay(RETRY_MS).then(function () { return attempt(0, pass + 1); });
       });
     }
-    return attempt(0);
+    return attempt(0, 0);
+  }
+
+  // ---- board cache ----------------------------------------------------------
+  // Tabbing between return origins refetched every time. That is slow to look at
+  // and it burns quota on a shared instance that rejects bursts (HTTP 401/429),
+  // which is exactly when the board breaks. A departure board barely changes in
+  // half a minute, so switching back to a route we just loaded renders from
+  // memory; auto-refresh and the refresh button always go to the network.
+  var CACHE_MS = 30000;
+  var boardCache = {};
+
+  var inflight = {};
+
+  function fetchPath(path, force) {
+    if (DEMO) {
+      return getJson("sample_board.json").then(function (d) { return { data: d, at: Date.now() }; });
+    }
+    var hit = boardCache[path];
+    if (!force && hit && Date.now() - hit.at <= CACHE_MS) return Promise.resolve(hit);
+    // One request per route at a time. Tabbing away used to abandon the request
+    // in flight, so a fast A→B→A never finished anything and never filled the
+    // cache; sharing it means the answer lands (and is cached) whichever board
+    // you end up looking at.
+    if (inflight[path]) return inflight[path];
+    var req = apiJson(path).then(function (data) {
+      var entry = { data: data, at: Date.now() };
+      boardCache[path] = entry;
+      delete inflight[path];
+      return entry;
+    }, function (err) {
+      delete inflight[path];
+      throw err;
+    });
+    inflight[path] = req;
+    return req;
+  }
+
+  // "HTTP 401 Unauthorized" is true but useless: it means the free, shared data
+  // service is refusing us for now (expired or over-quota Darwin token), not
+  // that anything is wrong with the app or the stations you picked.
+  function explain(err) {
+    var msg = (err && err.message) ? err.message : "network error";
+    if (/HTTP (401|403|429)/.test(msg)) {
+      return "the free data service is refusing requests right now (it's shared and rate-limited) — " +
+        "it usually clears in a minute";
+    }
+    if (/HTTP 5\d\d/.test(msg)) return "the free data service is having trouble upstream — try again shortly";
+    return msg;
   }
 
   function onError(err) {
     var hadRows = boardEl.querySelector(".row");
     if (!hadRows) boardEl.innerHTML = '<p class="placeholder">Could not load departures.</p>';
-    showBanner("Departures didn't load — " +
-      (err && err.message ? err.message : "network error") + ".", true);
+    showBanner("Departures didn't load — " + explain(err) + ".", true);
   }
 
   function loadSingle(from, to, myToken, opts) {
     opts = opts || {};
-    var sig = boardAbort && boardAbort.signal;
-    var req = DEMO ? getJson("sample_board.json") : apiJson(depPath(from, to, opts), sig);
-    return req.then(function (data) {
-      if (myToken !== fetchToken) return;
+    var path = depPath(from, to, opts);
+
+    function paint(hit) {
+      var data = hit.data;
       annotateJourney(data, to);
       var services = (data && data.trainServices) || [];
-      if (opts.pickTime) markPick(services, opts.pickTime);
+      markPick(services, opts.pickTime);
       renderServices(services, false);
-      applyMeta(data, opts.notice);
+      applyMeta(data, opts.notice, hit.at);
+    }
+
+    return fetchPath(path, opts.force).then(function (hit) {
+      if (myToken !== fetchToken) return;
+      paint(hit);
     }, function (err) {
       if (myToken !== fetchToken) return;
+      // An expired board for this route beats an empty screen: show it, dated,
+      // and say why it hasn't moved. The next refresh will replace it.
+      var stale = boardCache[path];
+      if (stale) {
+        paint(stale);
+        showBanner("Couldn't refresh — " + explain(err) + ". Showing the board from " +
+          hhmmOf(stale.at) + ".", true);
+        return;
+      }
       onError(err);
     });
   }
 
-  function loadTrip(myToken) {
+  function hhmmOf(ms) {
+    var d = new Date(ms);
+    return pad(d.getHours()) + ":" + pad(d.getMinutes());
+  }
+
+  function loadTrip(myToken, force) {
     if (!state.tripFrom) {
       boardEl.innerHTML = '<p class="placeholder">Pick a station to leave from.</p>';
       showBanner(null);
@@ -745,6 +842,7 @@
     }
     var win = tripWindow();
     return loadSingle(state.tripFrom, state.tripTo, myToken, {
+      force: force,
       rows: TRIP_ROWS,
       offset: win.offset,
       window: win.window,
@@ -756,20 +854,19 @@
   // Start a board fetch. Any request still in flight is abandoned first: after a
   // tab switch its answer is for a route we're no longer looking at, and letting
   // it run just delays the one we want.
-  function loadBoard() {
-    var myToken = ++fetchToken;
-    if (boardAbort) boardAbort.abort();
-    boardAbort = (typeof AbortController === "function") ? new AbortController() : null;
+  // force=true skips the board cache (auto-refresh and the refresh button want
+  // live data); a tab or origin switch is happy with a board fetched seconds ago.
+  function loadBoard(force) {
+    var myToken = ++fetchToken;   // only the newest load may paint the board
     startTimer(); // the next auto-refresh is a full interval from *this* load
 
-    if (state.mode === "trip") return loadTrip(myToken);
+    if (state.mode === "trip") return loadTrip(myToken, force);
 
-    var sig = boardAbort && boardAbort.signal;
     if (state.mode === "work") {
       // One work station → a plain board; two → a merged, tagged board.
-      if (!hasWorkB()) return loadSingle(state.home, state.workA, myToken);
-      var ra = DEMO ? getJson("sample_board.json") : apiJson(depPath(state.home, state.workA), sig);
-      var rb = DEMO ? getJson("sample_board.json") : apiJson(depPath(state.home, state.workB), sig);
+      if (!hasWorkB()) return loadSingle(state.home, state.workA, myToken, { force: force });
+      var ra = fetchPath(depPath(state.home, state.workA), force);
+      var rb = fetchPath(depPath(state.home, state.workB), force);
       return Promise.all([
         ra.then(function (d) { return d; }, function (e) { return { _err: e }; }),
         rb.then(function (d) { return d; }, function (e) { return { _err: e }; })
@@ -777,16 +874,16 @@
         if (myToken !== fetchToken) return;
         var a = res[0], b = res[1];
         if (a._err && b._err) { onError(a._err); return; }
-        var da = a._err ? null : annotateJourney(a, state.workA);
-        var db = b._err ? null : annotateJourney(b, state.workB);
+        var da = a._err ? null : annotateJourney(a.data, state.workA);
+        var db = b._err ? null : annotateJourney(b.data, state.workB);
         var merged = mergeWork(da, db);
         renderServices(merged.trainServices, true);
-        applyMeta(merged);
+        applyMeta(merged, null, Math.min(a._err ? Infinity : a.at, b._err ? Infinity : b.at));
       });
     }
 
     var origin = (hasWorkB() && state.ret === "B") ? state.workB : state.workA;
-    return loadSingle(origin, state.home, myToken);
+    return loadSingle(origin, state.home, myToken, { force: force });
   }
 
   // A route change (tab, return origin, trip fields, settings) makes the rows on
@@ -844,7 +941,7 @@
     refreshBtn.dataset.busy = "1";
     refreshBtn.classList.add("loading");
     refreshBtn.setAttribute("aria-busy", "true");
-    Promise.all([loadBoard(), delay(450)]).then(function () {
+    Promise.all([loadBoard(true), delay(450)]).then(function () {
       refreshBtn.classList.remove("loading");
       refreshBtn.removeAttribute("aria-busy");
       refreshBtn.dataset.busy = "0";
@@ -858,7 +955,7 @@
 
   function startTimer() {
     if (timer) clearInterval(timer);
-    timer = setInterval(loadBoard, REFRESH_MS);
+    timer = setInterval(function () { loadBoard(true); }, REFRESH_MS);
   }
 
   // ---------------------------------------------------------------- boot

@@ -20,6 +20,19 @@ expected arrival, journey time, platform, carriages) for a commute. No backend.
   404 for a typo'd CRS doesn't burn through the list. The first instance that
   answers becomes `activeBase` for the session. These are community-run with no
   uptime guarantee — an outage here is the most likely cause of a blank board.
+- These instances rate-limit and flake under bursts. `getJson` gives each request
+  an 8 s deadline; 401/403/408/429 are read as *instance* faults (over-quota or
+  expired Darwin token) so the walk continues to the next base, while 400/404
+  (bad CRS) still stops it. After a full sweep fails, `apiJson` waits ~1 s and
+  sweeps once more before surfacing an error, and `explain()` translates 401/5xx
+  into plain English.
+- Boards are cached in memory per request path for 30 s and in-flight requests are
+  shared per path, so tabbing between return origins re-renders from memory
+  instead of firing (and abandoning) a request each time — that burst is what
+  provoked the 401s. Auto-refresh and the refresh button pass `force` to bypass
+  the cache; the "Updated" stamp shows when the *data* was fetched.
+- On a failed load the last board for that route is re-rendered with its own
+  timestamp and a "couldn't refresh" banner, rather than blanking the screen.
 - Board: `/departures/{from}/to/{to}/{rows}?expand=true`. `expand=true` is needed
   for calling points → expected arrival + journey time. **Caveat:** if the live
   instance ignores `expand`, arrival/journey show "—" everywhere; fallback would
