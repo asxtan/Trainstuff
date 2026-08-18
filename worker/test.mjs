@@ -1,0 +1,150 @@
+// Offline checks for the Worker: no network, no wrangler, no Darwin key.
+// Run with: node test.mjs
+import worker from "./src/index.js";
+
+const ENV = {
+  DARWIN_KEY: "test-key-never-logged",
+  ALLOWED_ORIGINS: "https://asxtan.github.io",
+  LDBWS_BASE: "https://ldbws.test/api"
+};
+
+let upstream = null; // set per test: (url, init) => Response
+let lastRequest = null;
+
+globalThis.fetch = async (url, init) => {
+  lastRequest = { url: new URL(url), init };
+  return upstream(lastRequest.url, init);
+};
+
+const ok = (body) =>
+  new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { "Content-Type": "application/json" }
+  });
+
+function get(path, origin = "https://asxtan.github.io") {
+  return worker.fetch(
+    new Request("https://worker.test" + path, { headers: { Origin: origin } }),
+    ENV,
+    {}
+  );
+}
+
+let failures = 0;
+function check(name, cond) {
+  if (!cond) failures++;
+  console.log((cond ? "PASS  " : "FAIL  ") + name);
+}
+
+const SAMPLE = {
+  locationName: "East Croydon",
+  crs: "ECR",
+  trainServices: [
+    {
+      serviceID: "abc",
+      std: "08:15",
+      etd: "On time",
+      platform: "4",
+      length: 8,
+      operator: "Southern",
+      destination: { locationName: "London Victoria", crs: "VIC" },
+      subsequentCallingPoints: [{ locationName: "Clapham Junction", crs: "CLJ", st: "08:24", et: "On time" }]
+    }
+  ],
+  nrccMessages: [{ xhtmlMessage: "Engineering works this weekend." }]
+};
+
+/* ------------------------------------------------------------------ tests */
+
+// 1. Path + filter mapping
+upstream = () => ok(SAMPLE);
+let res = await get("/departures/ECR/to/VIC/8?expand=true");
+check("200 for a valid filtered board", res.status === 200);
+check("uses GetDepBoardWithDetails when expand=true",
+  lastRequest.url.pathname.includes("GetDepBoardWithDetails"));
+check("passes filterCrs", lastRequest.url.searchParams.get("filterCrs") === "VIC");
+check("passes filterType=to", lastRequest.url.searchParams.get("filterType") === "to");
+check("passes numRows", lastRequest.url.searchParams.get("numRows") === "8");
+check("sends the key in x-apikey", lastRequest.init.headers["x-apikey"] === ENV.DARWIN_KEY);
+
+// 2. Response shape app.js depends on
+let body = await res.json();
+const svc = body.trainServices[0];
+check("nests subsequentCallingPoints as Huxley does",
+  Array.isArray(svc.subsequentCallingPoints[0].callingPoint) &&
+  svc.subsequentCallingPoints[0].callingPoint[0].crs === "CLJ");
+check("wraps destination in an array", Array.isArray(svc.destination) &&
+  svc.destination[0].locationName === "London Victoria");
+check("preserves std/etd/platform/length",
+  svc.std === "08:15" && svc.etd === "On time" && svc.platform === "4" && svc.length === 8);
+check("maps xhtmlMessage to value", body.nrccMessages[0].value.startsWith("Engineering"));
+
+// 3. Unfiltered board (no /to/)
+upstream = () => ok(SAMPLE);
+await get("/departures/ECR/6");
+check("unfiltered board sets no filterCrs", !lastRequest.url.searchParams.has("filterCrs"));
+check("unfiltered board still sets numRows", lastRequest.url.searchParams.get("numRows") === "6");
+
+// 4. expand omitted → the cheaper operation
+upstream = () => ok(SAMPLE);
+await get("/departures/ECR/to/VIC/8");
+check("uses GetDepartureBoard without expand",
+  lastRequest.url.pathname.includes("GetDepartureBoard"));
+
+// 5. timeOffset clamping (Darwin only serves +/- 120 min)
+upstream = () => ok(SAMPLE);
+await get("/departures/ECR/to/VIC/8?expand=true&timeOffset=500");
+check("clamps timeOffset to +120", lastRequest.url.searchParams.get("timeOffset") === "120");
+await get("/departures/ECR/to/VIC/8?expand=true&timeOffset=-500");
+check("clamps timeOffset to -120", lastRequest.url.searchParams.get("timeOffset") === "-120");
+
+// 6. Validation happens before spending an upstream call
+lastRequest = null;
+upstream = () => ok(SAMPLE);
+res = await get("/departures/NOTACRS/to/VIC/8");
+check("rejects a malformed station code with 400", res.status === 400);
+check("malformed code costs no upstream call", lastRequest === null);
+
+// 7. Upstream failures map to 502, and never leak the key
+upstream = () => new Response("nope", { status: 401 });
+res = await get("/departures/ECR/to/VIC/8?expand=true");
+body = await res.json();
+check("401 upstream → 502", res.status === 502);
+check("401 message names the key problem", /API key/i.test(body.error));
+check("error body never contains the key", !JSON.stringify(body).includes(ENV.DARWIN_KEY));
+
+upstream = () => new Response("<html>down</html>", { status: 200, headers: { "Content-Type": "text/html" } });
+res = await get("/departures/ECR/to/VIC/8?expand=true");
+check("non-JSON upstream → 502 (the failure mode we hit)", res.status === 502);
+
+// 8. CORS
+upstream = () => ok(SAMPLE);
+res = await get("/departures/ECR/to/VIC/8?expand=true");
+check("allows the app origin",
+  res.headers.get("Access-Control-Allow-Origin") === "https://asxtan.github.io");
+res = await get("/departures/ECR/to/VIC/8?expand=true", "https://evil.test");
+check("does not allow an unknown origin",
+  res.headers.get("Access-Control-Allow-Origin") === null);
+
+res = await worker.fetch(
+  new Request("https://worker.test/departures/ECR/to/VIC/8", {
+    method: "OPTIONS",
+    headers: { Origin: "https://asxtan.github.io" }
+  }), ENV, {});
+check("preflight returns 204", res.status === 204);
+
+// 9. Missing secret is reported, not silently broken
+res = await worker.fetch(
+  new Request("https://worker.test/departures/ECR/to/VIC/8", {
+    headers: { Origin: "https://asxtan.github.io" }
+  }), { ALLOWED_ORIGINS: ENV.ALLOWED_ORIGINS }, {});
+check("missing DARWIN_KEY → 500 with a clear message", res.status === 500);
+
+// 10. Station search is a clean no-op (app falls back to stations.json)
+res = await get("/crs/croydon");
+body = await res.json();
+check("/crs returns an empty array, not an error",
+  res.status === 200 && Array.isArray(body) && body.length === 0);
+
+console.log(failures === 0 ? "\nAll checks passed." : `\n${failures} check(s) FAILED.`);
+process.exit(failures === 0 ? 0 : 1);

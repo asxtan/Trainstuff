@@ -1,0 +1,15 @@
+name = "commute-board-api"
+main = "src/index.js"
+compatibility_date = "2026-08-01"
+
+[vars]
+# Origins allowed to read responses. Comma-separated, no trailing slash.
+ALLOWED_ORIGINS = "https://asxtan.github.io,http://localhost:8000"
+
+# Base URL for your LDBWS subscription. The product slug differs between
+# subscriptions — copy the exact base from the Specification tab on Rail Data
+# Marketplace if requests come back 404.
+LDBWS_BASE = "https://api1.raildata.org.uk/1010-live-departure-board-dep1_2/LDBWS/api/20220120"
+
+# DARWIN_KEY is NOT set here — it's a secret. See worker/README.md:
+#   npx wrangler secret put DARWIN_KEY

@@ -42,6 +42,16 @@ expected arrival, journey time, platform, carriages) for a commute. No backend.
   serves ±120 min**, so Trip mode clamps to it and explains itself in the banner
   rather than silently showing the wrong trains.
 
+## Own data proxy (`worker/`)
+- Cloudflare Worker serving the same URL shape from the **Rail Data Marketplace**
+  LDBWS REST API, so `app.js` is unchanged — only the base URL in `config.js`.
+- Exists because a static PWA can't hold the Darwin key (readable in DevTools)
+  and LDBWS sends no CORS headers. Key lives as a Worker secret, never in git.
+- The National Rail Data Portal was retired early 2026 and legacy OpenLDBWS
+  tokens stopped working — the likely cause of the public instances going dark.
+- `worker/README.md` has the RDM signup + deploy steps. `node worker/test.mjs`
+  runs offline against a stubbed fetch (26 checks).
+
 ## Files
 - `index.html` / `app.js` / `styles.css` — the app.
 - `config.js` — `HUXLEY_BASE_URL`, defaults (home ECR, work A VIC, work B LBG),
