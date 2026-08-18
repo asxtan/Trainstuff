@@ -63,6 +63,7 @@
   };
   var fetchToken = 0;
   var timer = null;
+  var boardAbort = null;
 
   function stationName(crs) { return nameByCrs[crs] || crs || ""; }
   function pad(n) { return (n < 10 ? "0" : "") + n; }
@@ -216,7 +217,7 @@
       saveSettings();
       close();
       applyModeUI();
-      loadBoard();
+      switchBoard();
     }
 
     function clearValue() {
@@ -225,7 +226,7 @@
       saveSettings();
       close();
       applyModeUI();
-      loadBoard();
+      switchBoard();
     }
 
     function paintActive() {
@@ -334,7 +335,7 @@
     if (state.mode === m) return;
     state.mode = m;
     applyModeUI();
-    loadBoard();
+    switchBoard();
   }
 
   // ---------------------------------------------------------------- board data
@@ -594,8 +595,8 @@
   // wrong; everything else means this instance is unhealthy and we should try
   // the next one — including a 200 with an empty or non-JSON body, which is how
   // a Huxley instance with a dead Darwin token typically fails.
-  function getJson(url) {
-    return fetch(url, { cache: "no-store" }).then(function (r) {
+  function getJson(url, signal) {
+    return fetch(url, { cache: "no-store", signal: signal }).then(function (r) {
       if (!r.ok) {
         var msg = "API returned HTTP " + r.status + " " + (r.statusText || "");
         if (r.status >= 400 && r.status < 500) throw ourFaultErr(msg);
@@ -604,7 +605,10 @@
       return r.json().catch(function () {
         throw new Error("API at " + hostOf(url) + " sent an empty or non-JSON reply");
       });
-    }, function () {
+    }, function (err) {
+      // A board we've navigated away from: not a fault, and not a reason to try
+      // another instance. Flagged so apiJson stops walking the list.
+      if (signal && signal.aborted) throw ourFaultErr("aborted");
       // fetch() itself rejected: DNS, TLS, offline, or a missing CORS header.
       // Note an error response without CORS headers also lands here, which is
       // why a broken-but-reachable server can look identical to a dead one.
@@ -691,13 +695,13 @@
   // Fetch an API path, failing over to the next instance when one is
   // unreachable. Only transport-level failures trigger failover — a 404 for a
   // bad station code is a real answer and must not walk the whole list.
-  function apiJson(path) {
+  function apiJson(path, signal) {
     if (!BASES.length) return Promise.reject(new Error("no data service configured"));
     var order = [activeBase].concat(BASES.filter(function (b) { return b !== activeBase; }));
 
     function attempt(i) {
       var base = order[i];
-      return getJson(base + path).then(function (data) {
+      return getJson(base + path, signal).then(function (data) {
         activeBase = base;
         return data;
       }, function (err) {
@@ -718,7 +722,8 @@
 
   function loadSingle(from, to, myToken, opts) {
     opts = opts || {};
-    var req = DEMO ? getJson("sample_board.json") : apiJson(depPath(from, to, opts));
+    var sig = boardAbort && boardAbort.signal;
+    var req = DEMO ? getJson("sample_board.json") : apiJson(depPath(from, to, opts), sig);
     return req.then(function (data) {
       if (myToken !== fetchToken) return;
       annotateJourney(data, to);
@@ -748,16 +753,23 @@
     });
   }
 
+  // Start a board fetch. Any request still in flight is abandoned first: after a
+  // tab switch its answer is for a route we're no longer looking at, and letting
+  // it run just delays the one we want.
   function loadBoard() {
     var myToken = ++fetchToken;
+    if (boardAbort) boardAbort.abort();
+    boardAbort = (typeof AbortController === "function") ? new AbortController() : null;
+    startTimer(); // the next auto-refresh is a full interval from *this* load
 
     if (state.mode === "trip") return loadTrip(myToken);
 
+    var sig = boardAbort && boardAbort.signal;
     if (state.mode === "work") {
       // One work station → a plain board; two → a merged, tagged board.
       if (!hasWorkB()) return loadSingle(state.home, state.workA, myToken);
-      var ra = DEMO ? getJson("sample_board.json") : apiJson(depPath(state.home, state.workA));
-      var rb = DEMO ? getJson("sample_board.json") : apiJson(depPath(state.home, state.workB));
+      var ra = DEMO ? getJson("sample_board.json") : apiJson(depPath(state.home, state.workA), sig);
+      var rb = DEMO ? getJson("sample_board.json") : apiJson(depPath(state.home, state.workB), sig);
       return Promise.all([
         ra.then(function (d) { return d; }, function (e) { return { _err: e }; }),
         rb.then(function (d) { return d; }, function (e) { return { _err: e }; })
@@ -777,6 +789,15 @@
     return loadSingle(origin, state.home, myToken);
   }
 
+  // A route change (tab, return origin, trip fields, settings) makes the rows on
+  // screen wrong, not just stale — so clear them and say we're loading instead of
+  // leaving the old board sitting there looking frozen until the fetch lands.
+  function switchBoard() {
+    boardEl.innerHTML = '<p class="placeholder">Loading departures…</p>';
+    showBanner(null);
+    return loadBoard();
+  }
+
   // ---------------------------------------------------------------- wiring
   modeWorkBtn.addEventListener("click", function () { setMode("work"); });
   modeHomeBtn.addEventListener("click", function () { setMode("home"); });
@@ -788,18 +809,18 @@
     state.tripTime = t;
     saveSettings();
     refreshLabels();
-    loadBoard();
+    switchBoard();
   }
   tripTimeInput.addEventListener("change", function () { setTripTime(tripTimeInput.value); });
   tripNowBtn.addEventListener("click", function () { setTripTime(""); });
 
   retABtn.addEventListener("click", function () {
     if (state.ret === "A") return;
-    state.ret = "A"; saveSettings(); refreshLabels(); loadBoard();
+    state.ret = "A"; saveSettings(); refreshLabels(); switchBoard();
   });
   retBBtn.addEventListener("click", function () {
     if (state.ret === "B") return;
-    state.ret = "B"; saveSettings(); refreshLabels(); loadBoard();
+    state.ret = "B"; saveSettings(); refreshLabels(); switchBoard();
   });
 
   themeBtns.auto.addEventListener("click", function () { setTheme("auto"); });
@@ -814,7 +835,7 @@
   settingsDone.addEventListener("click", function () {
     settingsPanel.hidden = true;
     settingsBtn.setAttribute("aria-expanded", "false");
-    loadBoard();
+    switchBoard();
   });
 
   function delay(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
