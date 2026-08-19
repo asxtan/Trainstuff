@@ -51,8 +51,8 @@ expected arrival, journey time, platform, carriages) for a commute. No backend.
   and LDBWS sends no CORS headers. Key lives as a Worker secret, never in git.
 - The National Rail Data Portal was retired early 2026 and legacy OpenLDBWS
   tokens stopped working — the likely cause of the public instances going dark.
-- **Deployed:** `https://commute-board-api.asxtan.workers.dev`, first in
-  `HUXLEY_BASE_URLS`. `CLOUDFLARE_API_TOKEN` is in the cloud env, so
+- **Deployed:** `https://commute-board-api.asxtan.workers.dev`, the sole entry
+  in `API_BASE_URLS`. `CLOUDFLARE_API_TOKEN` is in the cloud env, so
   `npx wrangler deploy` works from the sandbox (account
   `ceb98bebf3a3cf18d57648d53108e005`). `npx wrangler tail` also works — its
   websocket host `tail.developers.workers.dev` is covered by the `*.workers.dev`
