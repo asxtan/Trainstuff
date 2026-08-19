@@ -1,12 +1,14 @@
 // App configuration. Edit these and redeploy to change defaults.
 window.CONFIG = {
-  // Data source: a public, CORS-enabled Huxley2 instance (Darwin LDBWS proxy).
-  // To use your own key/server later, point this at your self-hosted Huxley2
-  // or a Cloudflare Worker that injects a Darwin Rail Data Marketplace token.
-  // Tried in order; the first one that answers is used for the rest of the
-  // session. These are shared community instances with no uptime guarantee, so
-  // more than one matters — when the primary goes down the board just stops.
+  // Data sources, tried in order; the first that answers is used for the rest
+  // of the session. See worker/README.md for the proxy that serves these.
   HUXLEY_BASE_URLS: [
+    // Our own Cloudflare Worker (worker/), backed by a Rail Data Marketplace
+    // key. First because it's the one whose uptime we control.
+    "https://commute-board-api.asxtan.workers.dev",
+    // Community instances, kept as fallbacks. They depend on legacy Darwin
+    // tokens that stopped working when the Data Portal was retired, so treat
+    // them as a bonus rather than a safety net.
     "https://national-rail-api.davwheat.dev",
     "https://huxley2.azurewebsites.net",
     "https://onrails.azurewebsites.net"
