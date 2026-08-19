@@ -54,7 +54,10 @@ expected arrival, journey time, platform, carriages) for a commute. No backend.
 - **Deployed:** `https://commute-board-api.asxtan.workers.dev`, first in
   `HUXLEY_BASE_URLS`. `CLOUDFLARE_API_TOKEN` is in the cloud env, so
   `npx wrangler deploy` works from the sandbox (account
-  `ceb98bebf3a3cf18d57648d53108e005`; `wrangler tail` is still blocked).
+  `ceb98bebf3a3cf18d57648d53108e005`). `npx wrangler tail` also works — its
+  websocket host `tail.developers.workers.dev` is covered by the `*.workers.dev`
+  allowlist entry. It emits pretty-printed JSON, so parse it as a JSON *stream*
+  (`JSONDecoder.raw_decode` in a loop), not line by line.
 - **Gotcha:** LDBWS capitalises `nrccMessages[].Value`, and the body is HTML
   with entities — `pickMessage`/`plainText` handle both. Silently dropping
   every disruption message is the failure mode if that regresses.
