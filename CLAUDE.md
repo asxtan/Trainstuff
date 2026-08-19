@@ -14,34 +14,35 @@ expected arrival, journey time, platform, carriages) for a commute. No backend.
 - Keep chat replies concise; user prefers shorter responses.
 
 ## Data source
-- Public Huxley2 instances (Darwin LDBWS proxy): `HUXLEY_BASE_URLS` in `config.js`,
-  tried in order. Called directly from the browser. `apiJson()` fails over to the
-  next instance on a *transport* failure only (fetch rejects — down/DNS/CORS);
-  an HTTP status or bad JSON is flagged `err.reachable` and stops the walk, so a
-  404 for a typo'd CRS doesn't burn through the list. The first instance that
-  answers becomes `activeBase` for the session. These are community-run with no
-  uptime guarantee — an outage here is the most likely cause of a blank board.
-- These instances rate-limit and flake under bursts. `getJson` gives each request
-  an 8 s deadline; 401/403/408/429 are read as *instance* faults (over-quota or
-  expired Darwin token) so the walk continues to the next base, while 400/404
-  (bad CRS) still stops it. After a full sweep fails, `apiJson` waits ~1 s and
-  sweeps once more before surfacing an error, and `explain()` translates 401/5xx
-  into plain English.
-- Boards are cached in memory per request path for 30 s and in-flight requests are
-  shared per path, so tabbing between return origins re-renders from memory
-  instead of firing (and abandoning) a request each time — that burst is what
-  provoked the 401s. Auto-refresh and the refresh button pass `force` to bypass
-  the cache; the "Updated" stamp shows when the *data* was fetched.
+- **Own Cloudflare Worker only** (`worker/`), listed in `API_BASE_URLS` in
+  `config.js`. The public Huxley2 instances were removed: their legacy Darwin
+  tokens died with the National Rail Data Portal, and each dead host cost an
+  8 s timeout before the board could report an error. `app.js` still reads the
+  old `HUXLEY_BASE_URLS` / `HUXLEY_BASE_URL` keys as a fallback, so a stale
+  cached `config.js` degrades instead of leaving no base at all.
+- `apiJson()` walks `API_BASE_URLS` in order and pins `activeBase` to the first
+  that answers. It fails over on transport errors, 5xx, and empty/non-JSON
+  bodies; only a 4xx stops the walk, since that means *our request* was wrong
+  (e.g. a bad CRS) and the next base would reject it identically.
+- `getJson` gives each request an 8 s deadline; 401/403/408/429 are read as
+  instance faults so the walk continues. After a full sweep fails, `apiJson`
+  waits ~1 s and sweeps once more before surfacing an error, and `explain()`
+  translates 401/5xx into plain English.
+- Boards are cached in memory per request path for 30 s and in-flight requests
+  are shared per path, so tabbing between return origins re-renders from memory
+  instead of firing (and abandoning) a request each time. Auto-refresh and the
+  refresh button pass `force` to bypass the cache; the "Updated" stamp shows
+  when the *data* was fetched.
 - On a failed load the last board for that route is re-rendered with its own
   timestamp and a "couldn't refresh" banner, rather than blanking the screen.
-- Board: `/departures/{from}/to/{to}/{rows}?expand=true`. `expand=true` is needed
-  for calling points → expected arrival + journey time. **Caveat:** if the live
-  instance ignores `expand`, arrival/journey show "—" everywhere; fallback would
-  be a per-service details call. Station search: `/crs/{query}` (best-effort).
+- Board: `/departures/{from}/to/{to}/{rows}?expand=true`. `expand=true` gets
+  calling points → expected arrival + journey time. Station search
+  (`/crs/{query}`) returns `[]` from the Worker — LDBWS has no search
+  operation, so the picker uses the bundled `stations.json`.
 - `to` is optional (`/departures/{from}/{rows}`) → an all-destinations board.
 - `timeOffset` / `timeWindow` (minutes) move the board off "now". **Darwin only
-  serves ±120 min**, so Trip mode clamps to it and explains itself in the banner
-  rather than silently showing the wrong trains.
+  serves ±120 min**, so Trip mode clamps to it (and the Worker clamps again)
+  and explains itself in the banner rather than silently showing wrong trains.
 
 ## Own data proxy (`worker/`)
 - Cloudflare Worker serving the same URL shape from the **Rail Data Marketplace**
@@ -64,7 +65,7 @@ expected arrival, journey time, platform, carriages) for a commute. No backend.
 
 ## Files
 - `index.html` / `app.js` / `styles.css` — the app.
-- `config.js` — `HUXLEY_BASE_URL`, defaults (home ECR, work A VIC, work B LBG),
+- `config.js` — `API_BASE_URLS`, defaults (home ECR, work A VIC, work B LBG),
   `NUM_ROWS`, `REFRESH_MS`, `MORNING_BEFORE_HOUR`.
 - `manifest.webmanifest`, `sw.js` — PWA shell.
 - `stations.json` — bundled station list for the picker / offline.

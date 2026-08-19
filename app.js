@@ -2,9 +2,12 @@
 
 (function () {
   var CFG = window.CONFIG || {};
-  // Candidate Huxley2 instances, in preference order. activeBase sticks to
-  // whichever one last answered, so we don't re-walk the list on every refresh.
-  var BASES = (CFG.HUXLEY_BASE_URLS || [CFG.HUXLEY_BASE_URL] || [])
+  // Data-source bases in preference order. activeBase sticks to whichever one
+  // last answered, so we don't re-walk the list on every refresh. The HUXLEY_*
+  // names are the pre-Worker spelling, still read so a stale cached config.js
+  // paired with a fresh app.js degrades instead of leaving the board with no
+  // base at all.
+  var BASES = (CFG.API_BASE_URLS || CFG.HUXLEY_BASE_URLS || [CFG.HUXLEY_BASE_URL] || [])
     .filter(Boolean)
     .map(function (u) { return String(u).replace(/\/+$/, ""); });
   var activeBase = BASES[0] || "";
