@@ -35,6 +35,20 @@ Specification tab into `LDBWS_BASE` in `wrangler.toml`.
 
 ## 2. Deploy
 
+### Option A — Cloudflare dashboard (no terminal needed)
+
+1. <https://dash.cloudflare.com> → **Workers & Pages** → **Create** → **Start
+   from Hello World** → **Deploy**
+2. **Edit code**, replace the contents with `src/index.js` from this repo, and
+   **Deploy** again
+3. **Settings → Variables and Secrets** → add a **Secret** named `DARWIN_KEY`
+   with the RDM consumer key → **Deploy**
+
+Nothing else is required: the LDBWS base URL and the allowed origins both have
+working defaults compiled in. Add them as plain variables only to override.
+
+### Option B — wrangler CLI
+
 From this directory, with Node installed. No global install needed.
 
 ```sh

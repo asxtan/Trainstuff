@@ -31,6 +31,14 @@ const LDBWS_DEFAULT_BASE =
 // rather than a silently wrong board.
 const MAX_OFFSET_MIN = 120;
 
+// Used when ALLOWED_ORIGINS isn't set, so a dashboard deploy (where the only
+// required step is adding the DARWIN_KEY secret) is still locked down.
+const DEFAULT_ALLOWED_ORIGINS = [
+  "https://asxtan.github.io",
+  "http://localhost:8000",
+  "http://127.0.0.1:8000"
+];
+
 export default {
   async fetch(request, env, ctx) {
     const origin = request.headers.get("Origin");
@@ -68,10 +76,11 @@ export default {
 // (the Worker holds it server-side regardless) but it stops other sites from
 // quietly spending your Darwin quota.
 function corsHeaders(origin, env) {
-  const allowed = (env.ALLOWED_ORIGINS || "")
+  const configured = (env.ALLOWED_ORIGINS || "")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
+  const allowed = configured.length ? configured : DEFAULT_ALLOWED_ORIGINS;
 
   const headers = {
     "Access-Control-Allow-Methods": "GET,OPTIONS",
@@ -81,8 +90,6 @@ function corsHeaders(origin, env) {
   };
   if (origin && allowed.includes(origin)) {
     headers["Access-Control-Allow-Origin"] = origin;
-  } else if (allowed.length === 0) {
-    headers["Access-Control-Allow-Origin"] = "*"; // unconfigured → permissive
   }
   return headers;
 }

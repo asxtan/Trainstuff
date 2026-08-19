@@ -133,6 +133,23 @@ res = await worker.fetch(
   }), ENV, {});
 check("preflight returns 204", res.status === 204);
 
+// A dashboard deploy sets only DARWIN_KEY, so the built-in origin list has to
+// hold on its own — an unset ALLOWED_ORIGINS must not fall open to "*".
+const NO_ORIGINS_ENV = { DARWIN_KEY: ENV.DARWIN_KEY, LDBWS_BASE: ENV.LDBWS_BASE };
+upstream = () => ok(SAMPLE);
+res = await worker.fetch(
+  new Request("https://worker.test/departures/ECR/to/VIC/8?expand=true", {
+    headers: { Origin: "https://asxtan.github.io" }
+  }), NO_ORIGINS_ENV, {});
+check("unset ALLOWED_ORIGINS still allows the app origin",
+  res.headers.get("Access-Control-Allow-Origin") === "https://asxtan.github.io");
+res = await worker.fetch(
+  new Request("https://worker.test/departures/ECR/to/VIC/8?expand=true", {
+    headers: { Origin: "https://evil.test" }
+  }), NO_ORIGINS_ENV, {});
+check("unset ALLOWED_ORIGINS does not fall open to *",
+  res.headers.get("Access-Control-Allow-Origin") === null);
+
 // 9. Missing secret is reported, not silently broken
 res = await worker.fetch(
   new Request("https://worker.test/departures/ECR/to/VIC/8", {
