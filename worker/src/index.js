@@ -17,8 +17,14 @@
  * Query params honoured: expand, timeOffset, timeWindow.
  */
 
+// Operations from the "Live Arrival and Departure Boards" (public) product.
+// Note these are the Arr/Dep operations, not GetDepBoardWithDetails — that one
+// belongs to the separate "Live Departure Boards" product and 404s without it.
+const OP_DETAILED = "GetArrDepBoardWithDetails";
+const OP_PLAIN = "GetArrivalDepartureBoard";
+
 const LDBWS_DEFAULT_BASE =
-  "https://api1.raildata.org.uk/1010-live-departure-board-dep1_2/LDBWS/api/20220120";
+  "https://api1.raildata.org.uk/1010-live-arrival-and-departure-boards/LDBWS/api/20220120";
 
 // Darwin only serves this far either side of now; asking for more is an error
 // rather than a silently wrong board.
@@ -118,7 +124,7 @@ async function departures(parts, url, env, cors) {
   const numRows = clamp(parseInt(rows, 10) || 10, 1, 20);
   const detailed = url.searchParams.get("expand") === "true";
 
-  const op = detailed ? "GetDepBoardWithDetails" : "GetDepartureBoard";
+  const op = detailed ? OP_DETAILED : OP_PLAIN;
   const base = (env.LDBWS_BASE || LDBWS_DEFAULT_BASE).replace(/\/+$/, "");
   const target = new URL(`${base}/${op}/${from}`);
   target.searchParams.set("numRows", String(numRows));
@@ -166,22 +172,28 @@ async function departures(parts, url, env, cors) {
 // from that same schema, so the two are close. This smooths over the places
 // they drift: the calling-point nesting and the NRCC message field name.
 function normalise(data) {
-  const services = arr(data && (data.trainServices || data.services)).map((svc) => {
-    const out = { ...svc };
+  const services = arr(data && (data.trainServices || data.services))
+    // An Arr/Dep board also lists services that terminate here. They carry sta
+    // but no std, and app.js falls back to sta for the big time — which would
+    // render a train that never leaves as a departure. This is a departure
+    // board, so drop them.
+    .filter((svc) => svc && svc.std)
+    .map((svc) => {
+      const out = { ...svc };
 
-    // Huxley nests as subsequentCallingPoints[0].callingPoint[]; LDBWS REST
-    // sometimes flattens it to a plain array. app.js tolerates both, but
-    // normalising here keeps that tolerance from being load-bearing.
-    const scp = svc.subsequentCallingPoints;
-    if (Array.isArray(scp) && scp.length && !scp[0].callingPoint) {
-      out.subsequentCallingPoints = [{ callingPoint: scp }];
-    }
+      // Huxley nests as subsequentCallingPoints[0].callingPoint[]; LDBWS REST
+      // sometimes flattens it to a plain array. app.js tolerates both, but
+      // normalising here keeps that tolerance from being load-bearing.
+      const scp = svc.subsequentCallingPoints;
+      if (Array.isArray(scp) && scp.length && !scp[0].callingPoint) {
+        out.subsequentCallingPoints = [{ callingPoint: scp }];
+      }
 
-    if (out.destination && !Array.isArray(out.destination)) {
-      out.destination = [out.destination];
-    }
-    return out;
-  });
+      if (out.destination && !Array.isArray(out.destination)) {
+        out.destination = [out.destination];
+      }
+      return out;
+    });
 
   const messages = arr(data && data.nrccMessages).map((m) => {
     if (typeof m === "string") return { value: m };

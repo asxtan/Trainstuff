@@ -20,17 +20,18 @@ tokens no longer work. Keys now come from the Rail Data Marketplace:
 
 1. Create an account at <https://raildata.org.uk>
 2. In the Data Product Catalogue, search **LDBWS**
-3. Subscribe to **"Live Departure Board Web Service (LDBWS) - Public"**
-   — *not* "Live Fastest Departure Boards", which is a different product and
-   won't authenticate against these endpoints
+3. Subscribe to **"Live Arrival and Departure Boards"** (the public one).
+   The Worker uses its `GetArrDepBoardWithDetails` / `GetArrivalDepartureBoard`
+   operations — the plain "Live Departure Boards" product exposes different
+   operation names and would 404
 4. Accept the licence (approval is normally instant for the free tier)
 5. Open the product's **Specification** tab and copy the **Consumer key**
 
 Free tier is 100,000 calls/month — comfortably more than this app uses.
 
-While you're on the Specification tab, check the **base URL**. The product slug
-(`1010-live-departure-board-dep1_2`) varies between subscriptions. If it differs
-from the default, update `LDBWS_BASE` in `wrangler.toml`.
+While you're on the Specification tab, check the **base URL**. The product slug varies between
+subscriptions, so the default here is a guess — copy the exact base from the
+Specification tab into `LDBWS_BASE` in `wrangler.toml`.
 
 ## 2. Deploy
 
@@ -106,5 +107,12 @@ Covers path/filter mapping, the response reshaping `app.js` depends on,
   operation; the app already falls back to the bundled `stations.json`.
 - **Caching.** Upstream calls are edge-cached for 30 s, so several devices
   refreshing the same board cost one Darwin call.
-- **`expand=true`** maps to `GetDepBoardWithDetails`, which returns calling
+- **`expand=true`** maps to `GetArrDepBoardWithDetails`, which returns calling
   points — the source of the arrival time and journey duration.
+- **Terminating services are dropped.** An Arr/Dep board lists trains that
+  arrive but don't depart; they carry `sta` but no `std`, and the app falls
+  back to `sta`, so they would render as departures that never leave.
+- **The Staff version (LDBSVWS) is not used.** It takes an explicit `{time}`,
+  which would lift Trip mode past Darwin's ±120 min limit, but it has a
+  different response schema and a stricter licence. Worth revisiting only if
+  Trip mode needs times further out.

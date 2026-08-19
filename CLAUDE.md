@@ -50,7 +50,7 @@ expected arrival, journey time, platform, carriages) for a commute. No backend.
 - The National Rail Data Portal was retired early 2026 and legacy OpenLDBWS
   tokens stopped working — the likely cause of the public instances going dark.
 - `worker/README.md` has the RDM signup + deploy steps. `node worker/test.mjs`
-  runs offline against a stubbed fetch (26 checks).
+  runs offline against a stubbed fetch (27 checks).
 
 ## Files
 - `index.html` / `app.js` / `styles.css` — the app.

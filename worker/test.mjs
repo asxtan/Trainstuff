@@ -60,8 +60,8 @@ const SAMPLE = {
 upstream = () => ok(SAMPLE);
 let res = await get("/departures/ECR/to/VIC/8?expand=true");
 check("200 for a valid filtered board", res.status === 200);
-check("uses GetDepBoardWithDetails when expand=true",
-  lastRequest.url.pathname.includes("GetDepBoardWithDetails"));
+check("uses GetArrDepBoardWithDetails when expand=true",
+  lastRequest.url.pathname.includes("GetArrDepBoardWithDetails"));
 check("passes filterCrs", lastRequest.url.searchParams.get("filterCrs") === "VIC");
 check("passes filterType=to", lastRequest.url.searchParams.get("filterType") === "to");
 check("passes numRows", lastRequest.url.searchParams.get("numRows") === "8");
@@ -88,8 +88,8 @@ check("unfiltered board still sets numRows", lastRequest.url.searchParams.get("n
 // 4. expand omitted → the cheaper operation
 upstream = () => ok(SAMPLE);
 await get("/departures/ECR/to/VIC/8");
-check("uses GetDepartureBoard without expand",
-  lastRequest.url.pathname.includes("GetDepartureBoard"));
+check("uses GetArrivalDepartureBoard without expand",
+  lastRequest.url.pathname.endsWith("/GetArrivalDepartureBoard/ECR"));
 
 // 5. timeOffset clamping (Darwin only serves +/- 120 min)
 upstream = () => ok(SAMPLE);
@@ -140,7 +140,24 @@ res = await worker.fetch(
   }), { ALLOWED_ORIGINS: ENV.ALLOWED_ORIGINS }, {});
 check("missing DARWIN_KEY → 500 with a clear message", res.status === 500);
 
-// 10. Station search is a clean no-op (app falls back to stations.json)
+// 10. Arr/Dep boards list terminating services too. They have sta but no std,
+// and app.js falls back to sta, so they'd render as departures that never go.
+upstream = () => ok({
+  locationName: "East Croydon",
+  trainServices: [
+    { serviceID: "terminates", sta: "08:10", eta: "On time", platform: "1",
+      destination: { locationName: "East Croydon", crs: "ECR" } },
+    { serviceID: "departs", std: "08:15", etd: "On time", platform: "4",
+      destination: { locationName: "London Victoria", crs: "VIC" } }
+  ],
+  nrccMessages: []
+});
+res = await get("/departures/ECR/to/VIC/8?expand=true");
+body = await res.json();
+check("drops arrival-only services from a departure board",
+  body.trainServices.length === 1 && body.trainServices[0].serviceID === "departs");
+
+// 11. Station search is a clean no-op (app falls back to stations.json)
 res = await get("/crs/croydon");
 body = await res.json();
 check("/crs returns an empty array, not an error",
