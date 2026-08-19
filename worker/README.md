@@ -109,9 +109,14 @@ Covers path/filter mapping, the response reshaping `app.js` depends on,
   refreshing the same board cost one Darwin call.
 - **`expand=true`** maps to `GetArrDepBoardWithDetails`, which returns calling
   points — the source of the arrival time and journey duration.
-- **Terminating services are dropped.** An Arr/Dep board lists trains that
-  arrive but don't depart; they carry `sta` but no `std`, and the app falls
-  back to `sta`, so they would render as departures that never leave.
+- **Terminating services are dropped by default.** An Arr/Dep board lists
+  trains that arrive but don't depart; they carry `sta` but no `std`, and the
+  app falls back to `sta`, so they would render as departures that never leave.
+  Pass `?terminating=true` to keep them — the basis for an arrivals view later.
+- **Arrival times are already available.** `sta`/`eta` pass through untouched
+  for any service that both arrives and departs; the app simply doesn't render
+  them yet. Subscribing to Arr/Dep rather than departures-only costs nothing
+  and keeps that option open.
 - **The Staff version (LDBSVWS) is not used.** It takes an explicit `{time}`,
   which would lift Trip mode past Darwin's ±120 min limit, but it has a
   different response schema and a stricter licence. Worth revisiting only if

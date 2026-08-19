@@ -157,6 +157,23 @@ body = await res.json();
 check("drops arrival-only services from a departure board",
   body.trainServices.length === 1 && body.trainServices[0].serviceID === "departs");
 
+res = await get("/departures/ECR/to/VIC/8?expand=true&terminating=true");
+body = await res.json();
+check("terminating=true keeps them, for a future arrivals view",
+  body.trainServices.length === 2);
+
+// Arrival fields survive for trains that both arrive and depart, so an
+// arrivals view wouldn't need any Worker change to read them.
+upstream = () => ok({
+  trainServices: [{ serviceID: "through", sta: "08:12", eta: "08:14",
+    std: "08:15", etd: "On time", destination: { locationName: "London Victoria", crs: "VIC" } }],
+  nrccMessages: []
+});
+res = await get("/departures/ECR/to/VIC/8?expand=true");
+body = await res.json();
+check("passes sta/eta through untouched",
+  body.trainServices[0].sta === "08:12" && body.trainServices[0].eta === "08:14");
+
 // 11. Station search is a clean no-op (app falls back to stations.json)
 res = await get("/crs/croydon");
 body = await res.json();

@@ -123,6 +123,10 @@ async function departures(parts, url, env, cors) {
 
   const numRows = clamp(parseInt(rows, 10) || 10, 1, 20);
   const detailed = url.searchParams.get("expand") === "true";
+  // Opt in to keep services that terminate here (arrivals with no onward
+  // departure). Off by default because the app is a departure board, but the
+  // data is there if anything ever wants an arrivals view.
+  const keepTerminating = url.searchParams.get("terminating") === "true";
 
   const op = detailed ? OP_DETAILED : OP_PLAIN;
   const base = (env.LDBWS_BASE || LDBWS_DEFAULT_BASE).replace(/\/+$/, "");
@@ -163,7 +167,7 @@ async function departures(parts, url, env, cors) {
     throw bad("Darwin sent a non-JSON reply", 502);
   }
 
-  return json(normalise(data), 200, cors);
+  return json(normalise(data, keepTerminating), 200, cors);
 }
 
 /* ------------------------------------------------------------ reshaping */
@@ -171,13 +175,14 @@ async function departures(parts, url, env, cors) {
 // LDBWS REST is the SOAP schema rendered as JSON, and Huxley derived its output
 // from that same schema, so the two are close. This smooths over the places
 // they drift: the calling-point nesting and the NRCC message field name.
-function normalise(data) {
+function normalise(data, keepTerminating) {
   const services = arr(data && (data.trainServices || data.services))
     // An Arr/Dep board also lists services that terminate here. They carry sta
     // but no std, and app.js falls back to sta for the big time — which would
     // render a train that never leaves as a departure. This is a departure
-    // board, so drop them.
-    .filter((svc) => svc && svc.std)
+    // board, so drop them unless the caller asked for them. Services that both
+    // arrive and depart keep their sta/eta either way.
+    .filter((svc) => svc && (keepTerminating || svc.std))
     .map((svc) => {
       const out = { ...svc };
 
