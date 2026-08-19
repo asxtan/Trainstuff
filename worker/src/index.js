@@ -23,8 +23,9 @@
 const OP_DETAILED = "GetArrDepBoardWithDetails";
 const OP_PLAIN = "GetArrivalDepartureBoard";
 
+// Overridden by LDBWS_BASE in wrangler.toml; kept in sync as the fallback.
 const LDBWS_DEFAULT_BASE =
-  "https://api1.raildata.org.uk/1010-live-arrival-and-departure-boards/LDBWS/api/20220120";
+  "https://api1.raildata.org.uk/1010-live-arrival-and-departure-boards-arr-and-dep1_1/LDBWS/api/20220120";
 
 // Darwin only serves this far either side of now; asking for more is an error
 // rather than a silently wrong board.
