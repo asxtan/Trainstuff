@@ -191,6 +191,36 @@ body = await res.json();
 check("passes sta/eta through untouched",
   body.trainServices[0].sta === "08:12" && body.trainServices[0].eta === "08:14");
 
+// 11. NRCC messages: LDBWS REST capitalises the field, and the body is HTML.
+upstream = () => ok({
+  trainServices: [{ serviceID: "a", std: "08:15", etd: "On time",
+    destination: { locationName: "London Victoria", crs: "VIC" } }],
+  nrccMessages: [
+    { Value: "Trains&nbsp;between&nbsp;Oxted&nbsp;and Uckfield may be delayed by up to&nbsp;15 minutes. See <a href=\"https://example.com\">Status</a>." },
+    { Value: "" },
+    { Value: "   " }
+  ]
+});
+res = await get("/departures/ECR/to/VIC/8?expand=true");
+body = await res.json();
+check("reads the capitalised Value field", body.nrccMessages.length === 1);
+const msg = body.nrccMessages[0].value;
+check("decodes &nbsp; to real spaces", msg.includes("Trains between Oxted and Uckfield"));
+check("strips anchor markup", !msg.includes("<a") && !msg.includes("</a>"));
+check("keeps the human text around the link", msg.includes("See Status"));
+check("no gap before punctuation left by stripped markup", !/ \./.test(msg));
+check("drops blank messages", !body.nrccMessages.some((m) => !m.value.trim()));
+
+// Entity decoding shouldn't reintroduce markup that textContent would show raw.
+upstream = () => ok({
+  trainServices: [{ serviceID: "a", std: "08:15", destination: { locationName: "X", crs: "VIC" } }],
+  nrccMessages: [{ Value: "Delays &amp; cancellations &lt;here&gt;" }]
+});
+res = await get("/departures/ECR/to/VIC/8?expand=true");
+body = await res.json();
+check("decodes &amp; &lt; &gt;",
+  body.nrccMessages[0].value === "Delays & cancellations <here>");
+
 // 11. Station search is a clean no-op (app falls back to stations.json)
 res = await get("/crs/croydon");
 body = await res.json();

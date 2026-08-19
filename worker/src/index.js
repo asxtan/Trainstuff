@@ -208,10 +208,11 @@ function normalise(data, keepTerminating) {
       return out;
     });
 
-  const messages = arr(data && data.nrccMessages).map((m) => {
-    if (typeof m === "string") return { value: m };
-    return { value: m.value || m.xhtmlMessage || m.message || "" };
-  });
+  const messages = arr(data && data.nrccMessages)
+    .map((m) => (typeof m === "string" ? m : pickMessage(m)))
+    .map(plainText)
+    .filter(Boolean)
+    .map((value) => ({ value }));
 
   return {
     locationName: (data && data.locationName) || "",
@@ -220,6 +221,46 @@ function normalise(data, keepTerminating) {
     trainServices: services,
     nrccMessages: messages
   };
+}
+
+
+// LDBWS REST capitalises this field ("Value"); Huxley used "value" and the SOAP
+// schema also carried "xhtmlMessage". Match case-insensitively so a casing
+// change upstream doesn't silently drop every disruption message again.
+function pickMessage(m) {
+  if (!m || typeof m !== "object") return "";
+  for (const key of Object.keys(m)) {
+    const k = key.toLowerCase();
+    if (k === "value" || k === "xhtmlmessage" || k === "message") {
+      if (typeof m[key] === "string" && m[key].trim()) return m[key];
+    }
+  }
+  return "";
+}
+
+// NRCC messages are HTML fragments: markup plus entities. The app renders via
+// textContent, which shows entities literally ("Oxted&nbsp;and"), so flatten to
+// real plain text here. app.js still runs its own stripTags as a second guard.
+const ENTITIES = {
+  nbsp: " ", amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", "#39": "'", "#x27": "'"
+};
+
+function plainText(html) {
+  return String(html || "")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&(#x?[0-9a-fA-F]+|[a-zA-Z]+);/g, (whole, code) => {
+      const key = code.toLowerCase();
+      if (Object.prototype.hasOwnProperty.call(ENTITIES, key)) return ENTITIES[key];
+      if (key[0] === "#") {
+        const n = key[1] === "x" ? parseInt(key.slice(2), 16) : parseInt(key.slice(1), 10);
+        return Number.isFinite(n) && n > 0 && n < 0x10ffff ? String.fromCodePoint(n) : " ";
+      }
+      return " ";
+    })
+    .replace(/\s+/g, " ")
+    // Stripping inline markup leaves gaps before punctuation ("Disruptions .").
+    .replace(/\s+([.,;:!?])/g, "$1")
+    .trim();
 }
 
 /* ---------------------------------------------------------------- helpers */

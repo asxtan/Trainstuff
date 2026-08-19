@@ -8,8 +8,9 @@ expected arrival, journey time, platform, carriages) for a commute. No backend.
 - **Commit straight to `main`** — every push to `main` auto-deploys via
   `.github/workflows/pages.yml`. (User authorised direct-to-main; no PR needed.)
 - Pages source must be "GitHub Actions" (already enabled).
-- The sandbox **cannot reach `github.io`** (egress allowlist) — can't verify the
-  live site here; rely on the user. `git push` works (remote is allowlisted).
+- Egress allowlist now includes `asxtan.github.io`, `*.workers.dev`,
+  `api1.raildata.org.uk` and `wiki.openraildata.com`, so the live site, the
+  Worker and the Darwin upstream **can** be verified from the sandbox with curl.
 - Keep chat replies concise; user prefers shorter responses.
 
 ## Data source
@@ -49,8 +50,15 @@ expected arrival, journey time, platform, carriages) for a commute. No backend.
   and LDBWS sends no CORS headers. Key lives as a Worker secret, never in git.
 - The National Rail Data Portal was retired early 2026 and legacy OpenLDBWS
   tokens stopped working — the likely cause of the public instances going dark.
+- **Deployed:** `https://commute-board-api.asxtan.workers.dev`, first in
+  `HUXLEY_BASE_URLS`. `CLOUDFLARE_API_TOKEN` is in the cloud env, so
+  `npx wrangler deploy` works from the sandbox (account
+  `ceb98bebf3a3cf18d57648d53108e005`; `wrangler tail` is still blocked).
+- **Gotcha:** LDBWS capitalises `nrccMessages[].Value`, and the body is HTML
+  with entities — `pickMessage`/`plainText` handle both. Silently dropping
+  every disruption message is the failure mode if that regresses.
 - `worker/README.md` has the RDM signup + deploy steps. `node worker/test.mjs`
-  runs offline against a stubbed fetch (31 checks). Arr/Dep product, so
+  runs offline against a stubbed fetch (38 checks). Arr/Dep product, so
   arrivals (`sta`/`eta`) are already in the payload; `?terminating=true` keeps
   arrival-only services for a future arrivals view.
 
