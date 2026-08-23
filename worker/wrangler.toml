@@ -6,10 +6,10 @@ compatibility_date = "2026-08-01"
 # Origins allowed to read responses. Comma-separated, no trailing slash.
 ALLOWED_ORIGINS = "https://asxtan.github.io,http://localhost:8000"
 
-# Base URL for the "Live Arrival and Departure Boards" subscription. The product
-# slug is subscription-specific — if requests 404, re-copy it from the
-# Specification tab on Rail Data Marketplace.
-LDBWS_BASE = "https://api1.raildata.org.uk/1010-live-arrival-and-departure-boards-arr-and-dep1_1/LDBWS/api/20220120"
+# Base URL for the "Live Arrival and Departure Boards - Staff Version"
+# subscription. The product slug is subscription-specific — if requests 404,
+# re-copy it from the Specification tab on Rail Data Marketplace.
+LDBSVWS_BASE = "https://api1.raildata.org.uk/1010-live-arrival-and-departure-boards---staff-version1_0/LDBSVWS/api/20220120"
 
 # DARWIN_KEY is NOT set here — it's a secret. See worker/README.md:
 #   npx wrangler secret put DARWIN_KEY

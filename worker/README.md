@@ -20,10 +20,10 @@ tokens no longer work. Keys now come from the Rail Data Marketplace:
 
 1. Create an account at <https://raildata.org.uk>
 2. In the Data Product Catalogue, search **LDBWS**
-3. Subscribe to **"Live Arrival and Departure Boards"** (the public one).
-   The Worker uses its `GetArrDepBoardWithDetails` / `GetArrivalDepartureBoard`
-   operations — the plain "Live Departure Boards" product exposes different
-   operation names and would 404
+3. Subscribe to **"Live Arrival and Departure Boards - Staff Version"**.
+   The Worker uses its `GetArrDepBoardWithDetails` /
+   `GetArrivalDepartureBoardByCRS` operations. The public product is not used:
+   its destination filter 500s for some stations (VIC consistently)
 4. Accept the licence (approval is normally instant for the free tier)
 5. Open the product's **Specification** tab and copy the **Consumer key**
 
@@ -31,7 +31,7 @@ Free tier is 100,000 calls/month — comfortably more than this app uses.
 
 While you're on the Specification tab, check the **base URL**. The product slug
 is subscription-specific, so if requests come back 404, copy the exact base from
-that tab into `LDBWS_BASE` in `wrangler.toml`.
+that tab into `LDBSVWS_BASE` in `wrangler.toml`.
 
 ## 2. Deploy
 
@@ -88,7 +88,7 @@ Expect JSON with a `trainServices` array. Common failures:
 | Response | Meaning |
 | --- | --- |
 | `502` + "Darwin rejected the API key" | Wrong key, or the subscription isn't approved |
-| `502` + "Darwin returned HTTP 404" | `LDBWS_BASE` slug doesn't match your subscription |
+| `502` + "Darwin returned HTTP 404" | `LDBSVWS_BASE` slug doesn't match your subscription |
 | `500` + "missing the DARWIN_KEY secret" | `wrangler secret put` wasn't run, or ran against a different Worker |
 | CORS error in the browser only | Your origin isn't in `ALLOWED_ORIGINS` in `wrangler.toml` |
 
@@ -97,7 +97,7 @@ Expect JSON with a `trainServices` array. Common failures:
 | Name | Where | Purpose |
 | --- | --- | --- |
 | `DARWIN_KEY` | secret | RDM Consumer key |
-| `LDBWS_BASE` | `wrangler.toml` | LDBWS product base URL |
+| `LDBSVWS_BASE` | `wrangler.toml` | LDBSVWS product base URL |
 | `ALLOWED_ORIGINS` | `wrangler.toml` | Comma-separated origins allowed to read responses |
 
 `ALLOWED_ORIGINS` doesn't protect the key — the Worker holds that server-side
@@ -120,8 +120,13 @@ decoding, CORS, and that the key never reaches a response body.
   operation; the app already falls back to the bundled `stations.json`.
 - **Caching.** Upstream calls are edge-cached for 30 s, so several devices
   refreshing the same board cost one Darwin call.
-- **`numRows` maxes out at 10.** Darwin answers 500 above it rather than a 4xx,
-  so an over-large request is indistinguishable from an outage.
+- **`numRows` is 10** whatever you ask for — 149 comes back with 10.
+- **The time is a path segment in ISO basic form** (`20260823T165000`), in
+  London local time. Any colon breaks routing; UTC puts the board an hour out
+  during BST.
+- **Hidden platforms can't be shown.** Darwin blanks them itself, so a service
+  with `platformIsHidden: true` arrives with `platform: ""`.
+- **No authentication.** Anyone with the Worker URL can read it.
 - **Darwin's `filterCrs` is unreliable per-station** (VIC observed 500ing on
   every filtered call while its unfiltered board was fine). On a 5xx for a
   filtered board the Worker refetches unfiltered and filters on the calling

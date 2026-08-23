@@ -49,38 +49,42 @@ expected arrival, journey time, platform, carriages) for a commute. No backend.
   and explains itself in the banner rather than silently showing wrong trains.
 
 ## Own data proxy (`worker/`)
-- Cloudflare Worker serving the same URL shape from the **Rail Data Marketplace**
-  LDBWS REST API, so `app.js` is unchanged — only the base URL in `config.js`.
+- Cloudflare Worker serving the Huxley2 URL shape from the **Rail Data
+  Marketplace LDBSVWS (staff)** API, so `app.js` is unchanged — only the base
+  URL in `config.js`.
 - Exists because a static PWA can't hold the Darwin key (readable in DevTools)
-  and LDBWS sends no CORS headers. Key lives as a Worker secret, never in git.
-- The National Rail Data Portal was retired early 2026 and legacy OpenLDBWS
-  tokens stopped working — the likely cause of the public instances going dark.
-- **Deployed:** `https://commute-board-api.asxtan.workers.dev`, the sole entry
-  in `API_BASE_URLS`. `CLOUDFLARE_API_TOKEN` is in the cloud env, so
-  `npx wrangler deploy` works from the sandbox (account
-  `ceb98bebf3a3cf18d57648d53108e005`). `npx wrangler tail` also works — its
-  websocket host `tail.developers.workers.dev` is covered by the `*.workers.dev`
-  allowlist entry. It emits pretty-printed JSON, so parse it as a JSON *stream*
-  (`JSONDecoder.raw_decode` in a loop), not line by line.
+  and LDBSVWS sends no CORS headers. Key is a Worker secret, never in git.
+- **Staff, not public.** The public product's `filterCrs` 500s for some
+  stations — VIC consistently — which left the return board with 2 services
+  instead of 8. The staff filter works everywhere, and its explicit time
+  parameter removes the ±120 min limit on trip lookups. One source, one mapper.
+- **Time is a path segment in ISO basic form** (`20260823T165000`). Any colon,
+  raw or percent-encoded, fails to route and returns an ASP.NET error page
+  instead of JSON. It must be **London local time** — Workers run in UTC, so
+  BST would put every board an hour out (`londonBasic()`).
+- **Hidden platforms are not obtainable.** Darwin blanks them itself: a service
+  with `platformIsHidden: true` arrives with `platform: ""`. Nothing to reveal.
+- Staff boards also carry freight, empty stock, operational calls and
+  suppressed services; `normalise()` drops all of those, plus arrival-only
+  services (`?terminating=true` keeps the last group).
+- **Schema differs from the public product** and `normalise()` bridges it:
+  ISO timestamps → `HH:MM`, `subsequentLocations` → `subsequentCallingPoints`
+  (dropping junctions with no CRS), `sta`/`eta` → `st`/`et`, `rid` → `serviceID`.
+- **`numRows` is 10** whatever you ask for (149 returns 10). `MAX_ROWS` clamps.
+- **Darwin 5xx is common and station-specific.** On a 5xx for a *filtered*
+  board the Worker refetches unfiltered and filters on the calling points,
+  tagging the payload `filteredBy: "worker"`.
 - **Gotcha:** LDBWS capitalises `nrccMessages[].Value`, and the body is HTML
   with entities — `pickMessage`/`plainText` handle both. Silently dropping
   every disruption message is the failure mode if that regresses.
-- **`numRows` max is 10.** Above it Darwin answers 500 "service is currently
-  unavailable", not a 4xx — so an over-large request is indistinguishable from
-  an outage. The Worker clamps to `MAX_ROWS`; this bit the filter fallback,
-  which used to ask for 3× rows and so 500'd every time it was needed.
-- **VIC is a terminus**, so most of its board is arrivals with no `std`, which
-  the Worker drops. With `numRows` capped at 10 a VIC→ECR board is thin (2–4
-  services). Paging with `timeOffset` would fill it out if that matters.
-- **Darwin 5xx is common and station-specific.** On a 5xx for a *filtered*
-  board the Worker refetches unfiltered (3× rows) and filters on the calling
-  points `expand=true` already returns, tagging the payload `filteredBy:
-  "worker"`. It can't help when the unfiltered board is down too — that
-  surfaces as 502 "Darwin is not answering for this station".
+- **Deployed:** `https://commute-board-api.asxtan.workers.dev`, the sole entry
+  in `API_BASE_URLS`. **No authentication** — anyone with the URL can read it.
+  `CLOUDFLARE_API_TOKEN` is in the cloud env, so `npx wrangler deploy` and
+  `npx wrangler tail` both work from the sandbox (account
+  `ceb98bebf3a3cf18d57648d53108e005`). Tail emits pretty-printed JSON: parse it
+  as a JSON *stream* (`JSONDecoder.raw_decode` in a loop), not line by line.
 - `worker/README.md` has the RDM signup + deploy steps. `node worker/test.mjs`
-  runs offline against a stubbed fetch (51 checks). Arr/Dep product, so
-  arrivals (`sta`/`eta`) are already in the payload; `?terminating=true` keeps
-  arrival-only services for a future arrivals view.
+  runs offline against a stubbed fetch (41 checks).
 
 ## Files
 - `index.html` / `app.js` / `styles.css` — the app.
