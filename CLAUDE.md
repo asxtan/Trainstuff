@@ -62,12 +62,13 @@ expected arrival, journey time, platform, carriages) for a commute. No backend.
   raw or percent-encoded, fails to route and returns an ASP.NET error page
   instead of JSON. It must be **London local time** — Workers run in UTC, so
   BST would put every board an hour out (`londonBasic()`).
-- **`platformIsHidden: true` means "not assigned yet", not "withheld".** Such a
-  service arrives with `platform: ""`, and once the platform is published the
-  flag flips to false and the number appears — verified by watching one VIC
-  service go from `("" , true)` to `("15", false)` six minutes later. VIC
-  publishes ~8 min out; ECR and LBG have platforms 10–14 min out. No parameter
-  or access tier reveals more, because there is no number in the feed yet.
+- **`platformIsHidden: true` means "not shown on public boards"** — and the
+  number may or may not accompany it. KGX 18:03 came back `platform: "2",
+  hidden: true` half an hour out: known, withheld publicly, visible to us. VIC
+  services beyond ~8 min come back `platform: "", hidden: true`: not assigned
+  yet, and one was watched flipping to `("15", false)` as it neared departure.
+  **Don't generalise from one station** — an early sample of VIC only led to the
+  wrong conclusion that nothing is ever withheld.
 - Staff boards also carry freight, empty stock, operational calls and
   suppressed services; `normalise()` drops all of those, plus arrival-only
   services (`?terminating=true` keeps the last group).
@@ -121,9 +122,11 @@ expected arrival, journey time, platform, carriages) for a commute. No backend.
     for later can legitimately show "—". The banner says so.
 - Station matching folds apostrophes/hyphens (`foldName`), so "kings cross"
   finds "London King's Cross".
-- **"CH" beside the platform** (`.plat-hidden`) marks `platformIsHidden` — the
-  platform hasn't been announced yet, as opposed to missing from the feed. VIC
-  announces ~8 min out, so most of a VIC board carries it.
+- **"Hidden" beside the platform** (`.plat-hidden`) marks `platformIsHidden`:
+  not shown on public boards. Two cases share the flag — the platform is known
+  but withheld (KGX does this well ahead of departure, and the staff feed gives
+  us the number), or it isn't assigned yet and the number is blank (VIC beyond
+  ~8 min). So a row can read "Platform 2 Hidden" *or* "Platform — Hidden".
 - **Row layout:** left column = all time info (departure big, status, then
   "→ arrival · journey"); middle = destination/tags + platform (big number);
   right = carriages chip. Order chosen so it reads chronologically when delayed.

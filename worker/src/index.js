@@ -15,11 +15,12 @@
  * and its explicit time parameter lifts the +/-120 minute limit on trip
  * lookups. One data source, one mapper.
  *
- * ON HIDDEN PLATFORMS: platformIsHidden=true means the platform has not been
- * published yet, not that it is being kept from us — such a service arrives
- * with platform="", and when the platform is set the flag flips to false and
- * the number appears. Victoria publishes ~8 min before departure, East Croydon
- * and London Bridge much earlier. Whatever Darwin sends is passed through.
+ * ON HIDDEN PLATFORMS: platformIsHidden=true means "not shown on public
+ * boards". The number may still be present — King's Cross sends platform="2",
+ * hidden=true half an hour out, so the staff feed reveals a platform the public
+ * boards withhold. Elsewhere (Victoria beyond ~8 min) it arrives empty because
+ * nothing is assigned yet. Whatever Darwin sends is passed straight through,
+ * which means this Worker does serve withheld platform numbers.
  *
  * This Worker has no authentication: anyone who knows the URL can read it.
  *

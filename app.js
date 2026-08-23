@@ -479,15 +479,18 @@
     var b = document.createElement("b");
     b.textContent = platText(svc);
     line.appendChild(b);
-    // Darwin marks a platform it hasn't published yet. Flagging it tells a
-    // blank platform ("not announced, check back closer to departure") apart
-    // from one that's simply missing from the feed.
+    // Darwin flags platforms the public boards don't show. Two cases wear the
+    // same flag: the platform is known but withheld (King's Cross does this
+    // well ahead of departure, and the number is shown here), or it hasn't been
+    // assigned yet and the number is blank (Victoria, beyond ~8 min out).
     if (svc.platformIsHidden === true) {
-      var ch = document.createElement("span");
-      ch.className = "plat-hidden";
-      ch.textContent = "CH";
-      ch.title = "Platform not yet announced";
-      line.appendChild(ch);
+      var hid = document.createElement("span");
+      hid.className = "plat-hidden";
+      hid.textContent = "Hidden";
+      hid.title = platText(svc) === "—"
+        ? "Not shown on public boards — no platform assigned yet"
+        : "Not shown on public boards";
+      line.appendChild(hid);
     }
     return line;
   }
