@@ -62,8 +62,12 @@ expected arrival, journey time, platform, carriages) for a commute. No backend.
   raw or percent-encoded, fails to route and returns an ASP.NET error page
   instead of JSON. It must be **London local time** — Workers run in UTC, so
   BST would put every board an hour out (`londonBasic()`).
-- **Hidden platforms are not obtainable.** Darwin blanks them itself: a service
-  with `platformIsHidden: true` arrives with `platform: ""`. Nothing to reveal.
+- **`platformIsHidden: true` means "not assigned yet", not "withheld".** Such a
+  service arrives with `platform: ""`, and once the platform is published the
+  flag flips to false and the number appears — verified by watching one VIC
+  service go from `("" , true)` to `("15", false)` six minutes later. VIC
+  publishes ~8 min out; ECR and LBG have platforms 10–14 min out. No parameter
+  or access tier reveals more, because there is no number in the feed yet.
 - Staff boards also carry freight, empty stock, operational calls and
   suppressed services; `normalise()` drops all of those, plus arrival-only
   services (`?terminating=true` keeps the last group).

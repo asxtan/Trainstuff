@@ -124,8 +124,10 @@ decoding, CORS, and that the key never reaches a response body.
 - **The time is a path segment in ISO basic form** (`20260823T165000`), in
   London local time. Any colon breaks routing; UTC puts the board an hour out
   during BST.
-- **Hidden platforms can't be shown.** Darwin blanks them itself, so a service
-  with `platformIsHidden: true` arrives with `platform: ""`.
+- **`platformIsHidden: true` means the platform isn't published yet**, not that
+  it is withheld from this subscription: the service arrives with
+  `platform: ""`, and the number appears (flag flipping to false) as departure
+  approaches. Victoria publishes ~8 min out; other stations much earlier.
 - **No authentication.** Anyone with the Worker URL can read it.
 - **Darwin's `filterCrs` is unreliable per-station** (VIC observed 500ing on
   every filtered call while its unfiltered board was fine). On a 5xx for a
