@@ -378,6 +378,20 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* "CH" beside the platform: Darwin hasn't announced it yet. Muted and small —
+   it's a status note, not a platform number. */
+.plat-hidden {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  padding: 1px 4px;
+  line-height: 1;
+  opacity: 0.8;
+}
+
 /* Right: carriage count. */
 .col-cars { flex-shrink: 0; }
 .badge-label {

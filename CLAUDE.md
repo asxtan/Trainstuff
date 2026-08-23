@@ -121,6 +121,9 @@ expected arrival, journey time, platform, carriages) for a commute. No backend.
     for later can legitimately show "—". The banner says so.
 - Station matching folds apostrophes/hyphens (`foldName`), so "kings cross"
   finds "London King's Cross".
+- **"CH" beside the platform** (`.plat-hidden`) marks `platformIsHidden` — the
+  platform hasn't been announced yet, as opposed to missing from the feed. VIC
+  announces ~8 min out, so most of a VIC board carries it.
 - **Row layout:** left column = all time info (departure big, status, then
   "→ arrival · journey"); middle = destination/tags + platform (big number);
   right = carriages chip. Order chosen so it reads chronologically when delayed.

@@ -479,6 +479,16 @@
     var b = document.createElement("b");
     b.textContent = platText(svc);
     line.appendChild(b);
+    // Darwin marks a platform it hasn't published yet. Flagging it tells a
+    // blank platform ("not announced, check back closer to departure") apart
+    // from one that's simply missing from the feed.
+    if (svc.platformIsHidden === true) {
+      var ch = document.createElement("span");
+      ch.className = "plat-hidden";
+      ch.textContent = "CH";
+      ch.title = "Platform not yet announced";
+      line.appendChild(ch);
+    }
     return line;
   }
 
