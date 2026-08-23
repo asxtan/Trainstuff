@@ -15,6 +15,9 @@
   var REFRESH_MS = CFG.REFRESH_MS || 45000;
   var MORNING_BEFORE = CFG.MORNING_BEFORE_HOUR == null ? 12 : CFG.MORNING_BEFORE_HOUR;
   var DEMO = /[?&]demo=1\b/.test(location.search);
+  // ?debug=1 dumps what the board actually received, so a rendering problem can
+  // be told apart from a data problem without a laptop.
+  var DEBUG = /[?&]debug=1\b/.test(location.search);
 
   // Darwin publishes departure boards for roughly ±2 hours around now; asking
   // for anything outside that window is rejected, so trip lookups clamp to it.
@@ -545,7 +548,34 @@
     return row;
   }
 
+  // Show the raw values behind the rows, for ?debug=1.
+  function renderDebug(services, isWork) {
+    var old = document.getElementById("debug-dump");
+    if (old) old.parentNode.removeChild(old);
+    if (!DEBUG) return;
+    var lines = [
+      "now=" + new Date().toString(),
+      "mode=" + state.mode + " ret=" + state.ret + " isWork=" + isWork,
+      "home=" + state.home + " workA=" + state.workA + " workB=" + state.workB,
+      "base=" + activeBase,
+      "app=v11+debug  services=" + services.length,
+      ""
+    ];
+    services.forEach(function (svc, i) {
+      lines.push(i + ": std=" + svc.std + " sta=" + svc.sta + " etd=" + svc.etd +
+        " plat=" + svc.platform + " arr=" + svc._arr + " j=" + svc._jtext +
+        " dest=" + destName(svc));
+    });
+    var pre = document.createElement("pre");
+    pre.id = "debug-dump";
+    pre.style.cssText = "white-space:pre-wrap;font:11px/1.4 ui-monospace,monospace;" +
+      "padding:10px;margin:12px 0;border:1px solid currentColor;border-radius:8px;opacity:.85";
+    pre.textContent = lines.join("\n");
+    boardEl.parentNode.appendChild(pre);
+  }
+
   function renderServices(services, isWork) {
+    renderDebug(services, isWork);
     boardEl.innerHTML = "";
     if (!services.length) {
       var p = document.createElement("p");
