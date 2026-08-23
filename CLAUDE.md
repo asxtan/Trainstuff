@@ -65,8 +65,13 @@ expected arrival, journey time, platform, carriages) for a commute. No backend.
 - **Gotcha:** LDBWS capitalises `nrccMessages[].Value`, and the body is HTML
   with entities — `pickMessage`/`plainText` handle both. Silently dropping
   every disruption message is the failure mode if that regresses.
+- **Darwin 5xx is common and station-specific.** On a 5xx for a *filtered*
+  board the Worker refetches unfiltered (3× rows) and filters on the calling
+  points `expand=true` already returns, tagging the payload `filteredBy:
+  "worker"`. It can't help when the unfiltered board is down too — that
+  surfaces as 502 "Darwin is not answering for this station".
 - `worker/README.md` has the RDM signup + deploy steps. `node worker/test.mjs`
-  runs offline against a stubbed fetch (38 checks). Arr/Dep product, so
+  runs offline against a stubbed fetch (49 checks). Arr/Dep product, so
   arrivals (`sta`/`eta`) are already in the payload; `?terminating=true` keeps
   arrival-only services for a future arrivals view.
 

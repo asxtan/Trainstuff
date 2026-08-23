@@ -154,6 +154,44 @@ async function departures(parts, url, env, cors) {
     target.searchParams.set("timeWindow", String(clamp(window, 1, MAX_OFFSET_MIN)));
   }
 
+  let data = await callDarwin(target, env);
+
+  // Darwin's filterCrs is unreliable for some stations — London Victoria has
+  // been seen 500ing on every filtered request while the unfiltered board for
+  // the same station answers normally. When that happens, ask for the whole
+  // board and do the filtering here: with expand=true we already have the
+  // calling points, which is exactly what the filter was for.
+  let filteredLocally = false;
+  if (data === UPSTREAM_5XX) {
+    if (!to || !detailed) throw bad("Darwin is not answering for this station", 502);
+    const wide = new URL(`${base}/${op}/${from}`);
+    // Ask for more than we need: we're about to discard everything that
+    // doesn't call at the destination.
+    wide.searchParams.set("numRows", String(clamp(numRows * 3, 1, 20)));
+    for (const k of ["timeOffset", "timeWindow"]) {
+      if (target.searchParams.has(k)) wide.searchParams.set(k, target.searchParams.get(k));
+    }
+    data = await callDarwin(wide, env);
+    if (data === UPSTREAM_5XX) throw bad("Darwin is not answering for this station", 502);
+    filteredLocally = true;
+  }
+
+  const out = normalise(data, keepTerminating);
+  if (filteredLocally) {
+    out.trainServices = out.trainServices
+      .filter((svc) => callsAt(svc, to))
+      .slice(0, numRows);
+    out.filteredBy = "worker"; // visible in the payload when debugging
+  }
+  return json(out, 200, cors);
+}
+
+
+// Sentinel: the upstream answered, but with a 5xx we may be able to route
+// around. Distinct from a thrown error, which is terminal.
+const UPSTREAM_5XX = Symbol("upstream-5xx");
+
+async function callDarwin(target, env) {
   const res = await fetch(target.toString(), {
     headers: { "x-apikey": env.DARWIN_KEY, Accept: "application/json" },
     // Shared edge cache: several devices refreshing the same board cost one
@@ -164,18 +202,28 @@ async function departures(parts, url, env, cors) {
   if (res.status === 401 || res.status === 403) {
     throw bad("Darwin rejected the API key (check the RDM subscription)", 502);
   }
-  if (!res.ok) {
-    throw bad(`Darwin returned HTTP ${res.status}`, 502);
-  }
+  if (res.status >= 500) return UPSTREAM_5XX;
+  if (!res.ok) throw bad(`Darwin returned HTTP ${res.status}`, 502);
 
-  let data;
   try {
-    data = await res.json();
+    return await res.json();
   } catch (e) {
     throw bad("Darwin sent a non-JSON reply", 502);
   }
+}
 
-  return json(normalise(data, keepTerminating), 200, cors);
+// Does this service call at `crs` after leaving? Mirrors what filterType=to
+// means, using the calling points expand=true already gives us.
+function callsAt(svc, crsCode) {
+  const target = String(crsCode || "").toUpperCase();
+  const scp = (svc && svc.subsequentCallingPoints) || [];
+  for (const leg of scp) {
+    for (const cp of (leg && leg.callingPoint) || []) {
+      if (String((cp && cp.crs) || "").toUpperCase() === target) return true;
+    }
+  }
+  const dest = (svc && svc.destination) || [];
+  return dest.some((d) => String((d && d.crs) || "").toUpperCase() === target);
 }
 
 /* ------------------------------------------------------------ reshaping */

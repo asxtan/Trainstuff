@@ -191,6 +191,66 @@ body = await res.json();
 check("passes sta/eta through untouched",
   body.trainServices[0].sta === "08:12" && body.trainServices[0].eta === "08:14");
 
+// 10b. Darwin's filterCrs 500s for some stations (VIC observed) while the
+// unfiltered board answers. Fall back to fetching wide and filtering here.
+const WIDE = {
+  locationName: "London Victoria",
+  trainServices: [
+    { serviceID: "calls-ecr", std: "16:20", etd: "On time", platform: "12",
+      destination: { locationName: "Brighton", crs: "BTN" },
+      subsequentCallingPoints: [{ callingPoint: [
+        { locationName: "Clapham Junction", crs: "CLJ", st: "16:26" },
+        { locationName: "East Croydon", crs: "ECR", st: "16:38" }] }] },
+    { serviceID: "misses-ecr", std: "16:24", etd: "On time", platform: "9",
+      destination: { locationName: "Epsom", crs: "EPS" },
+      subsequentCallingPoints: [{ callingPoint: [
+        { locationName: "Sutton", crs: "SUO", st: "16:45" }] }] },
+    { serviceID: "terminates-ecr", std: "16:30", etd: "On time", platform: "15",
+      destination: { locationName: "East Croydon", crs: "ECR" },
+      subsequentCallingPoints: [{ callingPoint: [
+        { locationName: "Clapham Junction", crs: "CLJ", st: "16:36" }] }] }
+  ],
+  nrccMessages: []
+};
+let calls = [];
+upstream = (u) => {
+  calls.push(u.toString());
+  if (u.searchParams.has("filterCrs")) return new Response("upstream boom", { status: 500 });
+  return ok(WIDE);
+};
+res = await get("/departures/VIC/to/ECR/8?expand=true");
+body = await res.json();
+check("recovers from a 5xx on the filtered call", res.status === 200);
+check("retried without the filter", calls.length === 2 && !new URL(calls[1]).searchParams.has("filterCrs"));
+check("asked for extra rows before filtering",
+  new URL(calls[1]).searchParams.get("numRows") === "20");
+check("keeps services calling at the destination",
+  body.trainServices.some((s) => s.serviceID === "calls-ecr"));
+check("keeps services terminating at the destination",
+  body.trainServices.some((s) => s.serviceID === "terminates-ecr"));
+check("drops services that never reach the destination",
+  !body.trainServices.some((s) => s.serviceID === "misses-ecr"));
+check("marks the payload as worker-filtered", body.filteredBy === "worker");
+
+// Without calling points there is nothing to filter on, so don't guess.
+calls = [];
+res = await get("/departures/VIC/to/ECR/8");
+check("no expand -> reports the outage instead of guessing", res.status === 502);
+
+// A 5xx with no destination filter is just an outage.
+calls = [];
+upstream = () => new Response("boom", { status: 500 });
+res = await get("/departures/VIC/8?expand=true");
+check("unfiltered 5xx still surfaces as 502", res.status === 502);
+
+// A healthy filtered call must not trigger the fallback.
+calls = [];
+upstream = (u) => { calls.push(u.toString()); return ok(SAMPLE); };
+res = await get("/departures/ECR/to/VIC/8?expand=true");
+body = await res.json();
+check("healthy filtered call makes exactly one upstream request", calls.length === 1);
+check("healthy filtered call is not marked worker-filtered", body.filteredBy === undefined);
+
 // 11. NRCC messages: LDBWS REST capitalises the field, and the body is HTML.
 upstream = () => ok({
   trainServices: [{ serviceID: "a", std: "08:15", etd: "On time",
