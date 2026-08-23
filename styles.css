@@ -163,10 +163,18 @@ body {
 .trip-row { display: flex; gap: 8px; }
 .trip-row .field { flex: 1; min-width: 0; }
 .trip-pick input { font-size: 16px; padding: 10px; }
-/* The time input keeps its intrinsic width; the Now button takes the rest. */
-.trip-row.time-row { align-items: flex-end; }
-.trip-row.time-row .field { flex: 0 1 auto; }
-.trip-pick input[type="time"] { min-height: 44px; }
+/* iOS gives input[type=time] a much wider intrinsic size than desktop, so the
+   field has to be allowed to shrink below its min-content width — without
+   min-width:0 a flex item never shrinks past that, and the input pushed
+   straight through the "Now" button. The max-width stops the picker sprawling
+   across the row on wider screens. */
+.trip-row.time-row { align-items: flex-end; flex-wrap: nowrap; }
+.trip-row.time-row .field { flex: 1 1 auto; min-width: 0; }
+.trip-pick input[type="time"] {
+  min-height: 44px;
+  width: 100%;
+  max-width: 190px;
+}
 .trip-now {
   flex: 0 0 auto;
   min-width: 84px;
