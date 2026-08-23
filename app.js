@@ -754,6 +754,13 @@
   // half a minute, so switching back to a route we just loaded renders from
   // memory; auto-refresh and the refresh button always go to the network.
   var CACHE_MS = 30000;
+  // How stale a board may be and still be worth showing when a refresh fails.
+  // Past this, the departures are actively misleading rather than merely old:
+  // a suspended home-screen PWA keeps its in-memory cache overnight, so without
+  // a cap the board can come back showing last night's trains as if they were
+  // the next ones. Old enough to cover a normal refresh gap, short enough that
+  // every row on screen is still a train you could actually catch.
+  var STALE_MAX_MS = 10 * 60 * 1000;
   var boardCache = {};
 
   var inflight = {};
@@ -819,15 +826,17 @@
       paint(hit);
     }, function (err) {
       if (myToken !== fetchToken) return;
-      // An expired board for this route beats an empty screen: show it, dated,
-      // and say why it hasn't moved. The next refresh will replace it.
+      // A recently expired board beats an empty screen: show it, dated, and say
+      // why it hasn't moved. Beyond STALE_MAX_MS it stops being a stale board
+      // and becomes a wrong one, so we refuse to draw it at all.
       var stale = boardCache[path];
-      if (stale) {
+      if (stale && Date.now() - stale.at <= STALE_MAX_MS) {
         paint(stale);
-        showBanner("Couldn't refresh — " + explain(err) + ". Showing the board from " +
-          hhmmOf(stale.at) + ".", true);
+        showBanner("Couldn't refresh — " + explain(err) + ". These times were last " +
+          "checked at " + hhmmOf(stale.at) + ".", true);
         return;
       }
+      if (stale) delete boardCache[path];
       onError(err);
     });
   }

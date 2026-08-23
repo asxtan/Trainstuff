@@ -34,7 +34,11 @@ expected arrival, journey time, platform, carriages) for a commute. No backend.
   refresh button pass `force` to bypass the cache; the "Updated" stamp shows
   when the *data* was fetched.
 - On a failed load the last board for that route is re-rendered with its own
-  timestamp and a "couldn't refresh" banner, rather than blanking the screen.
+  timestamp and a "couldn't refresh" banner, rather than blanking the screen —
+  but only if it's younger than `STALE_MAX_MS` (10 min). **A home-screen PWA is
+  suspended, not reloaded**, so `boardCache` survives overnight; without the cap
+  a morning outage showed last night's trains as if they were the next ones.
+  Past the cap the entry is dropped and a plain error shown instead.
 - Board: `/departures/{from}/to/{to}/{rows}?expand=true`. `expand=true` gets
   calling points → expected arrival + journey time. Station search
   (`/crs/{query}`) returns `[]` from the Worker — LDBWS has no search
