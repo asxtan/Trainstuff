@@ -481,15 +481,15 @@
     line.appendChild(b);
     // Darwin flags platforms the public boards don't show. Two cases wear the
     // same flag: the platform is known but withheld (King's Cross does this
-    // well ahead of departure, and the number is shown here), or it hasn't been
-    // assigned yet and the number is blank (Victoria, beyond ~8 min out).
-    if (svc.platformIsHidden === true) {
+    // well ahead of departure, and the number is shown here), or nothing has
+    // been assigned yet and the number is blank. Only the first is worth
+    // marking — on a blank platform the flag adds nothing the "—" doesn't
+    // already say, and it fires on most of a Victoria board.
+    if (svc.platformIsHidden === true && platText(svc) !== "—") {
       var hid = document.createElement("span");
       hid.className = "plat-hidden";
       hid.textContent = "Hidden";
-      hid.title = platText(svc) === "—"
-        ? "Not shown on public boards — no platform assigned yet"
-        : "Not shown on public boards";
+      hid.title = "Not shown on National Rail's public boards yet";
       line.appendChild(hid);
     }
     return line;

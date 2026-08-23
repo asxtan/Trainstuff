@@ -122,11 +122,14 @@ expected arrival, journey time, platform, carriages) for a commute. No backend.
     for later can legitimately show "—". The banner says so.
 - Station matching folds apostrophes/hyphens (`foldName`), so "kings cross"
   finds "London King's Cross".
-- **"Hidden" beside the platform** (`.plat-hidden`) marks `platformIsHidden`:
-  not shown on public boards. Two cases share the flag — the platform is known
-  but withheld (KGX does this well ahead of departure, and the staff feed gives
-  us the number), or it isn't assigned yet and the number is blank (VIC beyond
-  ~8 min). So a row can read "Platform 2 Hidden" *or* "Platform — Hidden".
+- **"Hidden" beside the platform** (`.plat-hidden`) marks `platformIsHidden`,
+  but **only when a number is actually shown**. The flag covers two cases: the
+  platform is known and withheld from public boards (KGX, ~15–35 min early), or
+  nothing is assigned yet and the number is blank (most of a VIC board). Only
+  the first is worth marking — on a blank platform the tag is pure clutter.
+  Measured over one evening at KGX: the tag leads the National Rail site by
+  15–35 min, the site publishes within ~30 s of the flag clearing, and the
+  number is stable except that it can be *refined* (1 → 1A) at publication.
 - **Row layout:** left column = all time info (departure big, status, then
   "→ arrival · journey"); middle = destination/tags + platform (big number);
   right = carriages chip. Order chosen so it reads chronologically when delayed.
