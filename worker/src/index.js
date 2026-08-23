@@ -31,6 +31,11 @@ const LDBWS_DEFAULT_BASE =
 // rather than a silently wrong board.
 const MAX_OFFSET_MIN = 120;
 
+// LDBWS caps numRows at 10. Above it Darwin answers 500 "service is currently
+// unavailable" rather than a 4xx, so an over-large request looks exactly like
+// an outage — clamp here so it can never be mistaken for one.
+const MAX_ROWS = 10;
+
 // Used when ALLOWED_ORIGINS isn't set, so a dashboard deploy (where the only
 // required step is adding the DARWIN_KEY secret) is still locked down.
 const DEFAULT_ALLOWED_ORIGINS = [
@@ -129,7 +134,7 @@ async function departures(parts, url, env, cors) {
     rows = parts[2];
   }
 
-  const numRows = clamp(parseInt(rows, 10) || 10, 1, 20);
+  const numRows = clamp(parseInt(rows, 10) || MAX_ROWS, 1, MAX_ROWS);
   const detailed = url.searchParams.get("expand") === "true";
   // Opt in to keep services that terminate here (arrivals with no onward
   // departure). Off by default because the app is a departure board, but the
@@ -165,9 +170,10 @@ async function departures(parts, url, env, cors) {
   if (data === UPSTREAM_5XX) {
     if (!to || !detailed) throw bad("Darwin is not answering for this station", 502);
     const wide = new URL(`${base}/${op}/${from}`);
-    // Ask for more than we need: we're about to discard everything that
-    // doesn't call at the destination.
-    wide.searchParams.set("numRows", String(clamp(numRows * 3, 1, 20)));
+    // Ask for as much as Darwin allows: we're about to discard everything that
+    // doesn't call at the destination. Capped at MAX_ROWS -- asking for more
+    // is what made this fallback 500 every time it was needed.
+    wide.searchParams.set("numRows", String(MAX_ROWS));
     for (const k of ["timeOffset", "timeWindow"]) {
       if (target.searchParams.has(k)) wide.searchParams.set(k, target.searchParams.get(k));
     }

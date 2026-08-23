@@ -222,8 +222,8 @@ res = await get("/departures/VIC/to/ECR/8?expand=true");
 body = await res.json();
 check("recovers from a 5xx on the filtered call", res.status === 200);
 check("retried without the filter", calls.length === 2 && !new URL(calls[1]).searchParams.has("filterCrs"));
-check("asked for extra rows before filtering",
-  new URL(calls[1]).searchParams.get("numRows") === "20");
+check("asked for extra rows before filtering, within Darwin's cap",
+  new URL(calls[1]).searchParams.get("numRows") === "10");
 check("keeps services calling at the destination",
   body.trainServices.some((s) => s.serviceID === "calls-ecr"));
 check("keeps services terminating at the destination",
@@ -250,6 +250,16 @@ res = await get("/departures/ECR/to/VIC/8?expand=true");
 body = await res.json();
 check("healthy filtered call makes exactly one upstream request", calls.length === 1);
 check("healthy filtered call is not marked worker-filtered", body.filteredBy === undefined);
+
+// 10c. LDBWS caps numRows at 10 and answers 500 above it, which is
+// indistinguishable from an outage. Never send more than the cap.
+upstream = () => ok(SAMPLE);
+await get("/departures/ECR/to/VIC/20?expand=true");
+check("clamps an over-large row count to 10",
+  lastRequest.url.searchParams.get("numRows") === "10");
+await get("/departures/ECR/to/VIC/8?expand=true");
+check("leaves a valid row count alone",
+  lastRequest.url.searchParams.get("numRows") === "8");
 
 // 11. NRCC messages: LDBWS REST capitalises the field, and the body is HTML.
 upstream = () => ok({

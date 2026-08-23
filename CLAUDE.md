@@ -65,13 +65,20 @@ expected arrival, journey time, platform, carriages) for a commute. No backend.
 - **Gotcha:** LDBWS capitalises `nrccMessages[].Value`, and the body is HTML
   with entities — `pickMessage`/`plainText` handle both. Silently dropping
   every disruption message is the failure mode if that regresses.
+- **`numRows` max is 10.** Above it Darwin answers 500 "service is currently
+  unavailable", not a 4xx — so an over-large request is indistinguishable from
+  an outage. The Worker clamps to `MAX_ROWS`; this bit the filter fallback,
+  which used to ask for 3× rows and so 500'd every time it was needed.
+- **VIC is a terminus**, so most of its board is arrivals with no `std`, which
+  the Worker drops. With `numRows` capped at 10 a VIC→ECR board is thin (2–4
+  services). Paging with `timeOffset` would fill it out if that matters.
 - **Darwin 5xx is common and station-specific.** On a 5xx for a *filtered*
   board the Worker refetches unfiltered (3× rows) and filters on the calling
   points `expand=true` already returns, tagging the payload `filteredBy:
   "worker"`. It can't help when the unfiltered board is down too — that
   surfaces as 502 "Darwin is not answering for this station".
 - `worker/README.md` has the RDM signup + deploy steps. `node worker/test.mjs`
-  runs offline against a stubbed fetch (49 checks). Arr/Dep product, so
+  runs offline against a stubbed fetch (51 checks). Arr/Dep product, so
   arrivals (`sta`/`eta`) are already in the payload; `?terminating=true` keeps
   arrival-only services for a future arrivals view.
 
