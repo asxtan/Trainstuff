@@ -29,9 +29,9 @@ tokens no longer work. Keys now come from the Rail Data Marketplace:
 
 Free tier is 100,000 calls/month — comfortably more than this app uses.
 
-While you're on the Specification tab, check the **base URL**. The product slug varies between
-subscriptions, so the default here is a guess — copy the exact base from the
-Specification tab into `LDBWS_BASE` in `wrangler.toml`.
+While you're on the Specification tab, check the **base URL**. The product slug
+is subscription-specific, so if requests come back 404, copy the exact base from
+that tab into `LDBWS_BASE` in `wrangler.toml`.
 
 ## 2. Deploy
 
@@ -65,15 +65,13 @@ never appears in a response body — `test.mjs` asserts that.
 
 ## 3. Point the app at it
 
-In `config.js`, put the Worker first so it's preferred, keeping the public
-instances as fallbacks:
+In `config.js`, point `API_BASE_URLS` at the Worker. The public Huxley2
+instances used to sit here as fallbacks and were removed: their legacy Darwin
+tokens stopped working, so each one only added an 8 s timeout before the board
+could report an error.
 
 ```js
-HUXLEY_BASE_URLS: [
-  "https://commute-board-api.<your-subdomain>.workers.dev",
-  "https://national-rail-api.davwheat.dev",
-  "https://huxley2.azurewebsites.net"
-],
+API_BASE_URLS: ["https://commute-board-api.<your-subdomain>.workers.dev"],
 ```
 
 Then bump the `config.js` cache-buster in `index.html` and `sw.js`, and the
@@ -113,7 +111,8 @@ node test.mjs
 
 Runs offline against a stubbed `fetch`: no network, no wrangler, no real key.
 Covers path/filter mapping, the response reshaping `app.js` depends on,
-`timeOffset` clamping, CORS, and that the key never reaches a response body.
+`timeOffset` clamping, the `numRows` cap, the filter fallback, NRCC message
+decoding, CORS, and that the key never reaches a response body.
 
 ## Notes
 
@@ -121,6 +120,12 @@ Covers path/filter mapping, the response reshaping `app.js` depends on,
   operation; the app already falls back to the bundled `stations.json`.
 - **Caching.** Upstream calls are edge-cached for 30 s, so several devices
   refreshing the same board cost one Darwin call.
+- **`numRows` maxes out at 10.** Darwin answers 500 above it rather than a 4xx,
+  so an over-large request is indistinguishable from an outage.
+- **Darwin's `filterCrs` is unreliable per-station** (VIC observed 500ing on
+  every filtered call while its unfiltered board was fine). On a 5xx for a
+  filtered board the Worker refetches unfiltered and filters on the calling
+  points, tagging the payload `filteredBy: "worker"`.
 - **`expand=true`** maps to `GetArrDepBoardWithDetails`, which returns calling
   points — the source of the arrival time and journey duration.
 - **Terminating services are dropped by default.** An Arr/Dep board lists
