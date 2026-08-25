@@ -404,6 +404,19 @@ body {
   white-space: nowrap;
 }
 
+/* Typical loading, under the carriage count. Deliberately quiet: it's a
+   historical average, and less use than the carriage count above it. */
+.cars-load {
+  display: block;
+  margin-top: 2px;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--muted);
+  opacity: 0.75;
+  white-space: nowrap;
+}
+
 /* Right: carriage count. */
 .col-cars { flex-shrink: 0; }
 .badge-label {

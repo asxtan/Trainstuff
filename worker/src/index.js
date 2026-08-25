@@ -196,6 +196,7 @@ function normalise(data, keepTerminating) {
       sta: hhmm(svc.sta),
       eta: hhmm(svc.eta),
       serviceID: svc.rid || svc.uid || svc.trainid || "",
+      loadingPct: loadingPercent(svc),
       destination: arr(svc.destination),
       subsequentCallingPoints: [{ callingPoint: callingPoints(svc) }]
     }));
@@ -235,6 +236,16 @@ function callingPoints(svc) {
       et: hhmm(loc.eta) || hhmm(loc.etd),
       platform: loc.platform || ""
     }));
+}
+
+// How full this service typically runs, as a percentage, or null. Note the
+// capitalised "Value" — the same LDBWS quirk that silently dropped every NRCC
+// message. Only "Typical" has ever been observed here: it's a historical
+// expectation for this service at this time, NOT live crowding.
+function loadingPercent(svc) {
+  const lp = (((svc.formation || {}).serviceLoading || {}).loadingPercentage) || {};
+  const v = lp.Value !== undefined ? lp.Value : lp.value;
+  return typeof v === "number" && isFinite(v) ? v : null;
 }
 
 function callsAt(svc, crsCode) {

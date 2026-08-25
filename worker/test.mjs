@@ -39,6 +39,7 @@ const STAFF = {
       std: "2026-08-23T16:51:00", etd: "2026-08-23T16:51:00",
       sta: null, eta: null,
       platform: "16", platformIsHidden: true, length: 8, operator: "Southern",
+      formation: { serviceLoading: { loadingPercentage: { type: "Typical", Value: 86 } } },
       isPassengerService: true, isOperationalCall: false, serviceIsSupressed: false,
       isCancelled: false,
       destination: [{ locationName: "East Grinstead", crs: "EGR" }],
@@ -144,6 +145,10 @@ res = await get("/departures/VIC/to/ECR/8?expand=true");
 body = await res.json();
 check("platform is passed through untouched",
   body.trainServices[0].platform === "16" && body.trainServices[0].platformIsHidden === true);
+
+/* ---------------------------------------------------------- service loading */
+check("exposes the typical loading percentage", svc.loadingPct === 86);
+check("loading is null when absent", body.trainServices[1].loadingPct === null);
 
 /* --------------------------------------------------------------- messages */
 check("reads the capitalised Value field", body.nrccMessages.length === 1);

@@ -469,6 +469,19 @@
     var num = document.createElement("span"); num.className = "num"; num.textContent = n ? String(n) : "—";
     val.appendChild(ico); val.appendChild(num);
     wrap.appendChild(lab); wrap.appendChild(val);
+
+    // How full this service *typically* runs. Darwin only ever sends the
+    // "Typical" figure — a historical expectation for this service at this time
+    // of day, not live crowding — so it's labelled "usually" and kept visually
+    // subordinate to the carriage count, which is the harder fact.
+    if (typeof svc.loadingPct === "number") {
+      var load = document.createElement("span");
+      load.className = "cars-load";
+      load.textContent = "usually " + Math.round(svc.loadingPct) + "%";
+      load.title = "Typically " + Math.round(svc.loadingPct) +
+        "% full at this time — a historical average, not today's loading";
+      wrap.appendChild(load);
+    }
     return wrap;
   }
 

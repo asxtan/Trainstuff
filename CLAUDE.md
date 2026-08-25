@@ -130,6 +130,13 @@ expected arrival, journey time, platform, carriages) for a commute. No backend.
   Measured over one evening at KGX: the tag leads the National Rail site by
   15–35 min, the site publishes within ~30 s of the flag clearing, and the
   number is stable except that it can be *refined* (1 → 1A) at publication.
+- **Carriage chip** shows the coach count, with typical loading under it in a
+  quieter style (`.cars-load`, "usually 91%"). Coach counts are patchy and
+  operator-specific — Southern reported none at ECR/VIC on a weekday morning
+  while Thameslink and Great Northern reported all of theirs — so the loading
+  line often carries the only information in that column. Darwin only ever
+  sends `type: "Typical"` (33/33 sampled), i.e. a historical expectation for
+  this service at this time, **not** live crowding: hence "usually".
 - **Row layout:** left column = all time info (departure big, status, then
   "→ arrival · journey"); middle = destination/tags + platform (big number);
   right = carriages chip. Order chosen so it reads chronologically when delayed.
