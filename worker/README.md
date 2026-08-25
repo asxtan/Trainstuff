@@ -124,10 +124,13 @@ decoding, CORS, and that the key never reaches a response body.
 - **The time is a path segment in ISO basic form** (`20260823T165000`), in
   London local time. Any colon breaks routing; UTC puts the board an hour out
   during BST.
-- **`platformIsHidden: true` means the platform isn't published yet**, not that
-  it is withheld from this subscription: the service arrives with
-  `platform: ""`, and the number appears (flag flipping to false) as departure
-  approaches. Victoria publishes ~8 min out; other stations much earlier.
+- **`platformIsHidden: true` means "not shown on public boards"** — the number
+  may still be present. King's Cross and the other big termini send a real
+  platform with the flag set, 10–35 min before nationalrail.co.uk shows it;
+  Victoria and London Bridge send `platform: ""` because nothing is assigned
+  yet. Measured over 12 reveals: the number was correct every time (once
+  refined 1 → 1A at publication), and the site published within ~30 s of the
+  flag clearing.
 - **No authentication.** Anyone with the Worker URL can read it.
 - **Darwin's `filterCrs` is unreliable per-station** (VIC observed 500ing on
   every filtered call while its unfiltered board was fine). On a 5xx for a
@@ -143,7 +146,9 @@ decoding, CORS, and that the key never reaches a response body.
   for any service that both arrives and departs; the app simply doesn't render
   them yet. Subscribing to Arr/Dep rather than departures-only costs nothing
   and keeps that option open.
-- **The Staff version (LDBSVWS) is not used.** It takes an explicit `{time}`,
-  which would lift Trip mode past Darwin's ±120 min limit, but it has a
-  different response schema and a stricter licence. Worth revisiting only if
-  Trip mode needs times further out.
+- **Formation data is sparse and operator-specific.** Coach counts: Thameslink
+  ~19/25, Southern 0/7, Elizabeth Line 0 stated (but a `coaches[]` array whose
+  length the Worker counts instead). Whole-train loading: Southern 7/7,
+  Thameslink 5/25 — always `type: "Typical"`, a historical average rather than
+  live crowding. Per-coach loading exists only on Elizabeth Line, and carried
+  real numbers on just 3 of 29 sampled services.

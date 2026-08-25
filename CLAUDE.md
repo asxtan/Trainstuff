@@ -89,7 +89,12 @@ expected arrival, journey time, platform, carriages) for a commute. No backend.
   `ceb98bebf3a3cf18d57648d53108e005`). Tail emits pretty-printed JSON: parse it
   as a JSON *stream* (`JSONDecoder.raw_decode` in a loop), not line by line.
 - `worker/README.md` has the RDM signup + deploy steps. `node worker/test.mjs`
-  runs offline against a stubbed fetch (41 checks).
+  runs offline against a stubbed fetch (46 checks).
+- **Formation data is operator-specific.** `coachCount()` prefers `length`,
+  falling back to `formation.coaches.length` (Elizabeth Line states 0 but sends
+  the array). `loadingPct` comes from `serviceLoading.loadingPercentage.Value`
+  — capital V again. Per-coach loading exists only on Elizabeth Line and only
+  on ~10% of its services, so it isn't surfaced.
 
 ## Files
 - `index.html` / `app.js` / `styles.css` — the app.

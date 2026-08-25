@@ -146,6 +146,25 @@ body = await res.json();
 check("platform is passed through untouched",
   body.trainServices[0].platform === "16" && body.trainServices[0].platformIsHidden === true);
 
+/* ------------------------------------------------------------ coach count */
+check("keeps a stated length", svc.length === 8);
+
+upstream = () => ok({ trainServices: [
+  { rid: "el", std: "2026-08-25T09:04:00", isPassengerService: true, length: 0,
+    destination: [{ locationName: "Abbey Wood", crs: "ABW" }],
+    formation: { coaches: [{ coachClass: "Standard", number: "1" }, { coachClass: "Standard", number: "2" },
+                           { coachClass: "Standard", number: "3" }] },
+    subsequentLocations: [] },
+  { rid: "none", std: "2026-08-25T09:06:00", isPassengerService: true, length: 0,
+    destination: [{ locationName: "Shenfield", crs: "SNF" }], subsequentLocations: [] }
+], nrccMessages: [] });
+res = await get("/departures/PAD/9?expand=true");
+let cc = await res.json();
+check("derives the coach count from coaches[] when length is 0",
+  cc.trainServices[0].length === 3);
+check("stays 0 when there is neither a length nor coaches",
+  cc.trainServices[1].length === 0);
+
 /* ---------------------------------------------------------- service loading */
 check("exposes the typical loading percentage", svc.loadingPct === 86);
 check("loading is null when absent", body.trainServices[1].loadingPct === null);

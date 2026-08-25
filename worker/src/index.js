@@ -196,6 +196,7 @@ function normalise(data, keepTerminating) {
       sta: hhmm(svc.sta),
       eta: hhmm(svc.eta),
       serviceID: svc.rid || svc.uid || svc.trainid || "",
+      length: coachCount(svc),
       loadingPct: loadingPercent(svc),
       destination: arr(svc.destination),
       subsequentCallingPoints: [{ callingPoint: callingPoints(svc) }]
@@ -236,6 +237,17 @@ function callingPoints(svc) {
       et: hhmm(loc.eta) || hhmm(loc.etd),
       platform: loc.platform || ""
     }));
+}
+
+// Coach count. `length` is 0 for most operators, but Elizabeth Line services
+// carry a coaches[] array instead — often with no loading figures in it, but
+// its length is still the formation size. Prefer the stated length, fall back
+// to counting coaches, so the column isn't blank when Darwin plainly knows.
+function coachCount(svc) {
+  const stated = parseInt(svc.length, 10);
+  if (Number.isFinite(stated) && stated > 0) return stated;
+  const coaches = (svc.formation || {}).coaches;
+  return Array.isArray(coaches) && coaches.length ? coaches.length : 0;
 }
 
 // How full this service typically runs, as a percentage, or null. Note the
